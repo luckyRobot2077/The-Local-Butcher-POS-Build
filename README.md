@@ -4,10 +4,10 @@ Offline-first point of sale for **The Local Butcher**, a neighborhood meat shop 
 _Where Quality Meets Affordability._
 
 It is a Next.js web app that installs on Android as a Progressive Web App. Sales are saved on the
-device in IndexedDB, so the shop can keep selling with no internet. Cloud sync to Supabase is
-planned for Phase 2.
+device in IndexedDB first, so the shop can keep selling with no internet, and are sent to Supabase
+(cloud database) whenever the app is open and online.
 
-> **Status: Phase 0 and Phase 1 done (development build).** Not production-ready. Receipts are
+> **Status: Phases 0, 1 and 2 built (development).** Not production-ready. Receipts are
 > **non-fiscal test receipts**; this system is not BIR-registered. See
 > [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for what is done and what is pending.
 
@@ -28,6 +28,9 @@ planned for Phase 2.
 - **Device:** cashier name, store and receipt settings, manager PIN, storage status, and an
   **encrypted backup file** (AES-256-GCM) to copy to USB or an external drive, plus a checker
   that verifies a backup file.
+- **Cloud sync and staff sign-in (Phase 2):** owner sets up the store from the app, adds staff,
+  each device registers itself; sales, products, photos and stock changes sync with retry, no
+  duplicates, and conflict choices. Product permissions are enforced by the database.
 - **Offline:** after one online visit the installed app opens, sells and keeps sales with no
   internet, including after closing and reopening.
 
@@ -66,9 +69,24 @@ someone edits a product, the app asks them to create the **manager PIN**.
 | `npm run typecheck` | TypeScript |
 | `npm run lint` | ESLint (Next.js rules) |
 | `npm test` | Vitest unit and integration tests (fake IndexedDB) |
-| `npm run test:e2e` | Playwright browser tests against `next start` (run `npm run build` first) |
+| `npm run test:e2e` | Playwright browser tests: offline tests on `next start` (run `npm run build` first), cloud test on `next dev` with a fake Supabase |
 | `npm run test:db` | Applies `supabase/migrations` to a throwaway local PostgreSQL and runs SQL tests |
 | `npm run check` | All of the above except `test:db` |
+
+## Connecting Supabase (Phase 2)
+
+1. Create a free project at [supabase.com](https://supabase.com) (region: Southeast Asia / Singapore).
+2. **SQL Editor:** run every file in `supabase/migrations/` **in filename order**, each once.
+3. **Authentication → Sign In / Providers:** turn **off** "Allow new users to sign up". Staff logins are
+   created by the owner under **Authentication → Users → Add user**.
+4. **Project Settings → API:** copy the Project URL and the anon (publishable) key into Vercel
+   (**Settings → Environment Variables**) as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   then **redeploy** (these values are built into the app).
+5. Open the app → **Device** tab → sign in with the owner login → **Set up store as owner**. The first
+   account to do this becomes the owner; it only works while the database has no store.
+6. Owner adds staff on the Device tab (after creating their login in Supabase).
+
+The service-role key is **not** used by the app today. If you add it to Vercel, keep it server-only.
 
 ## Deploying to Vercel
 
@@ -85,7 +103,7 @@ Nothing has been deployed yet from this workspace.
 |---|---|---|
 | Hosting | Vercel account (free tier is enough to start) | Now |
 | Source code | GitHub repository | Now |
-| Cloud data, staff sign-in | Supabase project (URL, anon key, service-role key kept server-side) | 2 |
+| Cloud data, staff sign-in | Supabase project (URL and anon key in Vercel) | 2 |
 | Receipt printing | The physical PT-210 printer for compatibility testing | 6 (test early) |
 | Official receipts | BIR registration details, Permit to Use if required | Before fiscal use |
 | Off-site backups | A storage location for scheduled backups | 7 |
@@ -95,6 +113,7 @@ Nothing has been deployed yet from this workspace.
 ```
 src/domain/        Pure business rules: money, weights, pricing, discounts, cart, checkout, receipt
 src/lib/db/        Dexie (IndexedDB) schema and repositories: products, sales, config, seed
+src/lib/cloud/     Supabase client wrapper, account/session, sync engine
 src/lib/           PIN hashing, image compression, encrypted backup, printer adapters
 src/components/    UI primitives and POS screens
 src/app/           Next.js routes: /pos, /pos/products, /pos/history, /pos/device, /office

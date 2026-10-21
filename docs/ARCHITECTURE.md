@@ -50,14 +50,15 @@
 | Zod | Zod 4 | Product input and settings validation |
 | Recharts | not yet | Back Office (Phase 5) |
 | Vitest, Playwright | Vitest 5, Playwright 1.56 | |
-| Supabase Auth/Storage | not yet | Phase 2 |
+| Supabase Auth/Storage | supabase-js 2, email/password, private bucket | Browser calls database functions directly with the user's session (RLS + SECURITY DEFINER checks), so no server API routes or service key are needed for sync |
 
 ## Security in Phase 1 (honest limits)
 
 The manager PIN is a **local deterrent**, not real authorization: anyone with full access to the
-device's browser storage could bypass it. Real role checks arrive with Supabase Auth + RLS in Phase 2,
-and the database policies for that are already written and tested (`docs/DATABASE.md`). No secrets
-exist in the client; there are no service keys in this phase.
+device's browser storage could bypass it. Real authorization is in the database (Phase 2): every
+sync function checks the signed-in staff member's role and per-field permissions, and RLS limits reads
+to their store. The browser only holds the public anon key and the user's own session; the service-role
+key is not used by the app.
 
 ## Technical risks
 

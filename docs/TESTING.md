@@ -25,11 +25,14 @@ npm run test:db       # PostgreSQL migration tests (needs initdb/pg_ctl/psql ins
 | Backup | encrypt, verify, counts/totals round trip, photos included, PIN excluded, wrong passphrase, tampering |
 | PIN | hash/verify |
 | E2E | offline reload → sale → restart offline → sale and stock still there; reprint; phone layout sale; photo upload + description + price change with reason in POS mode; wrong PIN refused; discount above limit needs PIN |
-| Cloud SQL | CHECK constraints, idempotent `sync_sale`, conflicting resubmission rejected, unbalanced sale rejected atomically, RLS (cashier vs owner vs anon), immutable sales |
+| Cloud SQL | CHECK constraints, idempotent `sync_sale`, conflicting resubmission rejected, unbalanced sale rejected atomically, RLS (cashier vs owner vs anon), immutable sales; Phase 2: owner bootstrap only once, add staff, device registration, category merge, product create/update/conflict, field permissions (cashier price/description), photo attach and storage folder policy, idempotent movements, cashier stock view, discount details stored |
+| Sync engine | full push and pull, nothing re-sent on the next run, offline keeps everything queued, lost reply does not duplicate a sale, two devices share one catalog and stock, edit conflict with both resolutions, rejection → failed → retry |
+| Cloud E2E | sign-in (wrong and right password), device registration, sale synced exactly once across two runs, signed-in name becomes cashier (fake Supabase via request interception) |
 
 ## Not yet tested (needs hardware or accounts)
 
 - Real Android device install and offline use (tested only in headless Chromium).
 - Real PT-210 printing.
-- Supabase-hosted database, Auth, Storage (migrations tested on plain PostgreSQL 16 with an auth stub).
-- Two physical devices syncing (Phase 2).
+- The real Supabase project, Auth and Storage (SQL tested on plain PostgreSQL 16 with auth/storage stubs;
+  the app tested against a faked Supabase API).
+- Two physical devices syncing over the internet.

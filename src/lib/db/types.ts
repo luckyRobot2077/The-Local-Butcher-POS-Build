@@ -5,6 +5,8 @@ export interface Category {
   id: string;
   name: string;
   sortOrder: number;
+  /** True once the cloud has confirmed this category (and its id). */
+  synced?: boolean;
 }
 
 export interface Product {
@@ -29,6 +31,8 @@ export interface Product {
   updatedAt: string;
   /** Incremented on every edit; used for sync conflict detection in Phase 2. */
   version: number;
+  /** Server version this device last synced; undefined until first sync. */
+  serverVersion?: number;
   isSample?: boolean;
 }
 
@@ -97,6 +101,8 @@ export interface OutboxEntry {
   attempts: number;
   lastError?: string;
   lastAttemptAt?: string;
+  /** For a product edit rejected because the server changed: the server's copy. */
+  conflict?: Record<string, unknown>;
 }
 
 export interface AuditEntry {

@@ -16,6 +16,7 @@ import { formatManila } from "@/domain/time";
 import { Badge, Button, ErrorText, Field, inputClass } from "@/components/ui";
 import { usePos } from "./pos-context";
 import { getDb } from "@/lib/db/db";
+import { CloudSection } from "./cloud-section";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -64,10 +65,11 @@ export function DeviceScreen() {
             </dd>
           </dl>
           <p className="text-sm text-charcoal-700">
-            Sales are stored on this device until cloud sync is set up. Install the app to the home screen and export a
-            backup regularly.
+            Sales are saved on this device first and sent to the cloud when there is internet. Install the app to the
+            home screen, and export a backup regularly while any sales are not yet synced.
           </p>
         </Section>
+        <CloudSection />
         <BackupSection />
         <SettingsSectionKeyed />
         <PinSection />

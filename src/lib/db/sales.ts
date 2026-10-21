@@ -128,6 +128,6 @@ export async function syncCounts(db = getDb()) {
     db.outbox.where("status").equals("pending").count(),
     db.outbox.where("status").equals("failed").count(),
   ]);
-  const pendingSales = await db.sales.where("syncStatus").equals("pending").count();
+  const pendingSales = await db.sales.where("syncStatus").notEqual("synced").count();
   return { pending, failed, pendingSales };
 }

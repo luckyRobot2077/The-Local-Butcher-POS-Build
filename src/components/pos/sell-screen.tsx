@@ -27,6 +27,7 @@ import { QuantityDialog } from "./quantity-dialog";
 import { DiscountDialog } from "./discount-dialog";
 import { CheckoutDialog } from "./checkout-dialog";
 import { ReceiptView } from "./receipt-view";
+import { useRequestSync } from "./cloud-sync";
 
 const CART_KEY = "tlb-open-cart";
 
@@ -51,6 +52,7 @@ type Dialog =
 
 export function SellScreen() {
   const { settings, cashierName, requestManager } = usePos();
+  const requestSync = useRequestSync();
   const products = useLiveQuery(() => getDb().products.toArray(), []);
   const categories = useLiveQuery(() => listCategories(), []);
   const [category, setCategory] = useState<string>("all");
@@ -411,6 +413,7 @@ export function SellScreen() {
           onClose={() => setDialog(null)}
           onCompleted={(saleId) => {
             resetSale();
+            requestSync();
             setDialog({ type: "done", saleId });
           }}
         />
