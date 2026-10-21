@@ -31,7 +31,9 @@
 | `domain/discount.ts`, `cart.ts` | Discount validation and arithmetic, stacking policy, cart pricing |
 | `domain/checkout.ts` | Change, sale/item/payment records with snapshots |
 | `domain/receipt.ts` | Transport-independent 58 mm receipt text |
-| `lib/db/db.ts` | Dexie schema (local schema version 1) |
+| `domain/inventory.ts` | Inventory analytics: daily series, velocity, coverage, sell-through, classification, batches, alerts, order estimates |
+| `lib/db/db.ts` | Dexie schema (local schema version 2) |
+| `lib/db/inventory.ts` | Suppliers, atomic purchase receiving with batches and average cost, report data loading |
 | `lib/db/sales.ts` | Atomic `completeSale`, history, reprint logging |
 | `lib/db/products.ts` | Product create/update with revisions and price log, photos, stock ledger |
 | `lib/pin.ts` | Manager PIN (PBKDF2-SHA256, 210k iterations) |

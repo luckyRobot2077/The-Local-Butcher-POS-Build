@@ -51,6 +51,13 @@ function classify(error: { message: string; code?: string; status?: number } | n
   // PostgREST passes Postgres SQLSTATE codes through. Class 42 (privileges),
   // 22 (data), 23 (constraints), P0 (raised) and PGRST errors are real rejections.
   const code = error?.code;
+  if (code === "PGRST202") {
+    // A function the app calls does not exist: the database is behind the app.
+    throw new CloudRejection(
+      "The cloud database needs an update: run the newest file in supabase/migrations in the Supabase SQL Editor.",
+      code,
+    );
+  }
   if (code && /^(42|22|23|P0|PGRST)/.test(code)) throw new CloudRejection(msg, code);
   if (error?.status && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429) {
     throw new CloudRejection(msg, code ?? String(error.status));

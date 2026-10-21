@@ -94,6 +94,16 @@ test("sign in, register the device and sync a sale exactly once", async ({ page 
         }
         case "store_stock":
           return json(200, []);
+        case "inventory_feed":
+          return json(200, {
+            now: new Date().toISOString(),
+            suppliers: [],
+            purchases: [],
+            purchase_items: [],
+            batches: [],
+            movements: [],
+            sale_lines: [],
+          });
       }
       return json(404, { code: "PGRST202", message: `no function ${fn}` });
     }
@@ -126,6 +136,9 @@ test("sign in, register the device and sync a sale exactly once", async ({ page 
   await expect(page.getByTestId("sync-panel")).toContainText("Waiting to send: 0");
   await page.getByTestId("sync-now").click();
   await expect(page.getByTestId("sync-panel")).toContainText("Problems: 0");
+  await expect(page.getByTestId("sync-panel")).not.toContainText("Last attempt");
+  await expect(page.getByTestId("sync-panel")).not.toContainText("Inventory reports");
+  expect(rpcCalls.filter((c) => c.fn === "inventory_feed").length).toBeGreaterThan(0);
 
   expect(rpcCalls.filter((c) => c.fn === "sync_sale")).toHaveLength(1);
   expect(rpcCalls.filter((c) => c.fn === "sync_product")).toHaveLength(16);

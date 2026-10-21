@@ -357,6 +357,7 @@ function SyncPanel({ onSync, busy }: { onSync: () => void; busy: boolean }) {
             Waiting to send: <strong>{pending.length}</strong> · Problems: <strong>{failed.length}</strong>
           </div>
           {meta?.lastError && <div className="text-amber-800">Last attempt: {meta.lastError}</div>}
+          {meta?.feedError && <div className="text-amber-800">Inventory reports: {meta.feedError}</div>}
         </div>
         <Button onClick={onSync} disabled={busy} data-testid="sync-now">
           {busy ? "Syncing…" : "Sync now"}

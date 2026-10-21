@@ -71,7 +71,7 @@ export interface PriceChange {
 }
 
 export type MovementType =
-  "sale" | "delivery" | "return" | "correction" | "damage" | "spoilage" | "trim_loss" | "other";
+  "sale" | "purchase" | "delivery" | "return" | "correction" | "damage" | "spoilage" | "trim_loss" | "other";
 
 export interface InventoryMovement {
   id: string;
@@ -86,11 +86,77 @@ export interface InventoryMovement {
   reason?: string;
   batchCode?: string;
   useBy?: string;
+  /** Batch this movement belongs to: the batch received, or the batch wasted from. */
+  batchId?: string;
+  /** Set on movements created by receiving a supplier purchase. */
+  purchaseId?: string;
+  /** Recorded on another device and downloaded from the cloud. */
+  remote?: boolean;
   by: string;
   at: string;
 }
 
-export type OutboxKind = "sale" | "product" | "inventory_movement" | "product_image";
+export interface Supplier {
+  id: string;
+  name: string;
+  contact?: string;
+  notes?: string;
+  active: boolean;
+  updatedAt: string;
+}
+
+export type PaymentStatus = "unpaid" | "partial" | "paid";
+
+/** A supplier delivery. Its lines, batches and stock movements are immutable once saved. */
+export interface Purchase {
+  id: string;
+  supplierId: string;
+  receivedAt: string;
+  reference?: string;
+  notes?: string;
+  paymentStatus: PaymentStatus;
+  totalCost: Centavos;
+  by: string;
+  deviceId?: string;
+  remote?: boolean;
+}
+
+export interface PurchaseItem {
+  id: string;
+  purchaseId: string;
+  productId: string;
+  batchId: string;
+  qty: number;
+  unitCost: Centavos;
+  lineCost: Centavos;
+}
+
+/** A lot of perishable stock with its receiving and use-by dates. */
+export interface InventoryBatch {
+  id: string;
+  productId: string;
+  purchaseId?: string;
+  batchCode?: string;
+  receivedAt: string;
+  useBy?: string;
+  storageNote?: string;
+  initialQty: number;
+  unitCost: Centavos;
+}
+
+/** A sale line recorded on another device, downloaded for reports. */
+export interface RemoteSaleLine {
+  id: string;
+  saleId: string;
+  productId: string;
+  qty: number;
+  net: Centavos;
+  cost: Centavos;
+  at: string;
+}
+
+export type OutboxKind =
+  "sale" | "product" | "inventory_movement" | "product_image" | "supplier" | "purchase" | "purchase_payment";
 
 export interface OutboxEntry {
   id: string;

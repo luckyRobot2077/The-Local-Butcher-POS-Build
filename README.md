@@ -31,6 +31,13 @@ device in IndexedDB first, so the shop can keep selling with no internet, and ar
 - **Cloud sync and staff sign-in (Phase 2):** owner sets up the store from the app, adds staff,
   each device registers itself; sales, products, photos and stock changes sync with retry, no
   duplicates, and conflict choices. Product permissions are enforced by the database.
+- **Inventory (Phase 3, POS → Inventory, manager PIN):** receive supplier deliveries with cost, batch
+  or lot code and use-by date (stock and average cost update in one step); suppliers and payment
+  status; waste recorded against the batch it came from; alerts kept in two groups: use-by and food
+  safety, and stock and demand (low stock, fast sellers running out, slow sellers overstocked, no
+  sales, rising wastage, demand up or down); fast/normal/slow/non-moving classification among similar
+  products, sales per day counted only on days in stock, stock coverage, sell-through, wastage rate,
+  gross profit; suggested order quantities (estimates only); CSV export; adjustable thresholds.
 - **Offline:** after one online visit the installed app opens, sells and keeps sales with no
   internet, including after closing and reopening.
 
@@ -85,6 +92,10 @@ someone edits a product, the app asks them to create the **manager PIN**.
 5. Open the app → **Device** tab → sign in with the owner login → **Set up store as owner**. The first
    account to do this becomes the owner; it only works while the database has no store.
 6. Owner adds staff on the Device tab (after creating their login in Supabase).
+
+**Updating later:** when a new release adds a migration (for example `20261023000005_inventory.sql` in
+Phase 3), run just that new file once in the SQL Editor. Until it is run, sales still sync and the
+Device tab says the cloud database needs an update.
 
 The service-role key is **not** used by the app today. If you add it to Vercel, keep it server-only.
 

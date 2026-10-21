@@ -7,7 +7,8 @@ import { listCategories } from "@/lib/db/products";
 import type { Product } from "@/lib/db/types";
 import { formatPeso } from "@/domain/money";
 import { formatQuantity, unitLabel } from "@/domain/quantity";
-import { formatManila } from "@/domain/time";
+import { businessDate, formatManila } from "@/domain/time";
+import { estimateBatches, WASTE_TYPES } from "@/domain/inventory";
 import { Badge, Button, Modal } from "@/components/ui";
 import { usePos } from "./pos-context";
 import { ProductImage, StockBadge } from "./product-tile";
@@ -147,15 +148,25 @@ function ProductDetails({
   onEditPhoto: () => void;
   onAdjust: () => void;
 }) {
-  const history = useLiveQuery(
-    async () => ({
-      moves: (await getDb().inventoryMovements.where("productId").equals(product.id).sortBy("at"))
-        .reverse()
-        .slice(0, 20),
+  const history = useLiveQuery(async () => {
+    const all = (await getDb().inventoryMovements.where("productId").equals(product.id).sortBy("at")).reverse();
+    const waste = new Map<string, number>();
+    for (const m of all)
+      if (m.batchId && WASTE_TYPES.includes(m.type)) waste.set(m.batchId, (waste.get(m.batchId) ?? 0) - m.qtyDelta);
+    const batches = estimateBatches({
+      batches: await getDb().batches.where("productId").equals(product.id).toArray(),
+      stock: product.stockQty,
+      wasteByBatch: waste,
+      velocity: 0,
+      today: businessDate(new Date()),
+    }).filter((b) => b.remaining > 0);
+    return {
+      moves: all.slice(0, 20),
+      lastRestock: all.find((m) => m.type === "purchase" || m.type === "delivery")?.at,
+      batches,
       prices: (await getDb().priceChanges.where("productId").equals(product.id).sortBy("at")).reverse().slice(0, 10),
-    }),
-    [product.id],
-  );
+    };
+  }, [product.id, product.stockQty]);
   return (
     <Modal
       open
@@ -197,6 +208,8 @@ function ProductDetails({
           </dd>
           <dt className="text-charcoal-500">Low at</dt>
           <dd>{formatQuantity(product.saleUnit, product.minStockQty)}</dd>
+          <dt className="text-charcoal-500">Last restock</dt>
+          <dd>{history?.lastRestock ? formatManila(history.lastRestock) : "—"}</dd>
           {product.sku && (
             <>
               <dt className="text-charcoal-500">SKU</dt>
@@ -210,6 +223,25 @@ function ProductDetails({
         </dl>
       </div>
       {product.description && <p className="mt-3 text-charcoal-700">{product.description}</p>}
+      {!!history?.batches.length && (
+        <>
+          <h3 className="mt-4 font-bold text-burgundy-800">Batches on hand (estimate)</h3>
+          <ul className="mt-1 divide-y divide-cream-200 text-sm" data-testid="batches-on-hand">
+            {history.batches.map((b) => (
+              <li key={b.id} className="flex justify-between gap-2 py-1">
+                <span>
+                  {b.batchCode ? `Batch ${b.batchCode}` : "No batch code"} · received {formatManila(b.receivedAt)}
+                  {b.useBy ? ` · use by ${b.useBy}` : ""}
+                </span>
+                <span className={b.daysLeft !== null && b.daysLeft < 0 ? "font-semibold text-red-700" : ""}>
+                  ~{formatQuantity(product.saleUnit, b.remaining)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-charcoal-500">Assumes the earliest use-by stock sells first.</p>
+        </>
+      )}
       <h3 className="mt-4 font-bold text-burgundy-800">Stock history</h3>
       <ul className="mt-1 divide-y divide-cream-200 text-sm">
         {history?.moves.map((m) => (
