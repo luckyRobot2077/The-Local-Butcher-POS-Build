@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Applies supabase/migrations to a throwaway local PostgreSQL and runs
-# supabase/tests/schema_test.sql. Needs PostgreSQL server binaries
+# For each supabase/tests/*_test.sql: creates a fresh database on a throwaway
+# local PostgreSQL, applies the Supabase stub and all migrations, runs the test. Needs PostgreSQL server binaries
 # (initdb, pg_ctl) on PATH or in /usr/lib/postgresql/*/bin.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,11 +21,14 @@ trap cleanup EXIT
 "${RUN[@]}" "$PGBIN/initdb -D '$TMP/data' -U postgres -A trust >/dev/null"
 "${RUN[@]}" "$PGBIN/pg_ctl -D '$TMP/data' -o '-p $PORT -k $TMP -c listen_addresses=' -l '$TMP/log' -w start >/dev/null"
 PSQL=(psql -h "$TMP" -p "$PORT" -U postgres -v ON_ERROR_STOP=1 -q)
-"${PSQL[@]}" -c "create database pos_test"
-"${PSQL[@]}" -d pos_test -f "$ROOT/supabase/tests/auth_stub.sql"
-for f in "$ROOT"/supabase/migrations/*.sql; do
-  echo "applying $(basename "$f")"
-  "${PSQL[@]}" -d pos_test -f "$f"
+for t in "$ROOT"/supabase/tests/*_test.sql; do
+  name="$(basename "$t" .sql)"
+  echo "== $name"
+  "${PSQL[@]}" -c "create database $name"
+  "${PSQL[@]}" -d "$name" -f "$ROOT/supabase/tests/auth_stub.sql"
+  for f in "$ROOT"/supabase/migrations/*.sql; do
+    "${PSQL[@]}" -d "$name" -f "$f"
+  done
+  "${PSQL[@]}" -d "$name" -f "$t" 2>&1 | sed 's/^psql:[^ ]* NOTICE:  /  /'
 done
-"${PSQL[@]}" -d pos_test -f "$ROOT/supabase/tests/schema_test.sql" 2>&1 | sed 's/^psql:[^ ]* NOTICE:  /  /'
 echo "migration tests passed"

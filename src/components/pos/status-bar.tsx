@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { syncCounts } from "@/lib/db/sales";
 
@@ -59,11 +60,20 @@ export function SyncStatus({ compact = false }: { compact?: boolean }) {
       {counts && (
         <span
           className="rounded-full bg-burgundy-900/40 px-2 py-1"
-          title="Sales saved on this device and waiting for cloud sync (cloud sync arrives in Phase 2)"
+          title="Sales saved on this device and not yet confirmed by the cloud"
           data-testid="pending-count"
         >
           {counts.pendingSales} {compact ? "unsynced" : `sale${counts.pendingSales === 1 ? "" : "s"} not yet synced`}
         </span>
+      )}
+      {!!counts?.failed && (
+        <Link
+          href="/pos/device#sync"
+          className="rounded-full bg-red-600 px-2 py-1 font-semibold text-white"
+          data-testid="sync-failed"
+        >
+          {counts.failed} sync problem{counts.failed === 1 ? "" : "s"}
+        </Link>
       )}
     </div>
   );

@@ -7,7 +7,7 @@ Database name `local-butcher-pos`, local schema version **1** (`src/lib/db/db.ts
 | Table | Key / indexes | Contents |
 |---|---|---|
 | `categories` | id, sortOrder | Pork, Beef, Chicken, Salmon by default |
-| `products` | id, categoryId, name, active, sku, barcode | Master data, `price`/`cost` in centavos, `stockQty` projection, `version` |
+| `products` | id, categoryId, name, active, sku, barcode | Master data, `price`/`cost` in centavos, `stockQty` projection, `version`, `serverVersion` (last synced) |
 | `productImages` | id, productId, uploadStatus | Compressed JPEG blobs (≤800 px), `pending` until uploaded |
 | `productRevisions` | id, productId, at | Before/after of changed fields per version |
 | `priceChanges` | id, productId, at | Price/cost change log with user and reason |
@@ -17,7 +17,7 @@ Database name `local-butcher-pos`, local schema version **1** (`src/lib/db/db.ts
 | `inventoryMovements` | id, productId, type, at, refId | Append-only stock ledger |
 | `outbox` | id, kind, status, entityId | Durable sync queue (sale, product, inventory_movement, product_image) |
 | `auditLog` | id, action, at | Product edits, stock changes, discounts, prints |
-| `config` | key | `device`, `settings`, `cashierName`, `managerPin` (hash), `receiptSeq`, `lastExportAt` |
+| `config` | key | `device`, `settings`, `cashierName`, `managerPin` (hash), `receiptSeq`, `lastExportAt`, `cloud` (signed-in identity), `syncMeta` |
 
 Future changes must add a new `this.version(n)` with an upgrade function; never edit version 1 in place.
 
@@ -40,9 +40,17 @@ Future changes must add a new `this.version(n)` with an upgrade function; never 
    idempotent, atomic, security-definer function that writes a sale with items, payment and stock
    movements. Same payload twice → `duplicate`; different payload with the same id → rejected.
 
-These migrations have **not been applied to a Supabase project** (none exists yet). They are tested on
-plain PostgreSQL 16 with a small stub of Supabase's `auth` schema: `npm run test:db`
-(see `supabase/tests/schema_test.sql`).
+3. `20261022000003_device_sync.sql` (Phase 2) — `bootstrap_owner` (first account creates the store and
+   becomes owner; refused once a store exists), `add_staff`, `whoami`, `register_device`, `sync_category`
+   (merge by name), `sync_product` (version check, per-field permission check, revisions and price log),
+   `sync_product_image`, `sync_movement` (owner/manager only, idempotent), `store_stock`, and a new
+   `sync_sale` that also stores discount details in `sale_discounts`.
+4. `20261022000004_storage.sql` (Phase 2) — private `product-images` bucket; staff can read their store's
+   folder; only photo editors can upload; no overwrite or delete.
+
+Tested on plain PostgreSQL 16 with a small stub of Supabase's `auth` and `storage` schemas:
+`npm run test:db` runs `supabase/tests/schema_test.sql` and `supabase/tests/sync_test.sql`, each on a
+fresh database with all migrations applied.
 
 To apply to a real project later: `supabase link --project-ref <ref>` then `supabase db push`.
 

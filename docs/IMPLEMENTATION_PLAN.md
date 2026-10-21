@@ -38,9 +38,31 @@ Legend: ✅ done and tested · 🟡 partial · ⬜ not started
 **Milestone met in automated test:** a cash sale is completed with the network cut, and is still there,
 with stock reduced, after closing and reopening the app offline.
 
+## Phase 2 — Cloud synchronization 🟡 (built and tested locally; waiting on the owner's Supabase project)
+
+| Item | Status |
+|---|---|
+| Supabase database (schema, RLS, functions) | ✅ migrations 1–4, tested on PostgreSQL 16; 🟡 not yet run on the real project |
+| Employee authentication (Supabase Auth email/password), owner bootstrap, add staff | ✅ |
+| Device registration | ✅ |
+| Durable outbox and sync engine with retry | ✅ |
+| Idempotent sale sync (lost reply, retries) | ✅ |
+| Product, category, photo and stock-movement upload; catalog and stock download | ✅ |
+| Server-side permission checks (prices, names, photos, descriptions, categories, stock) | ✅ |
+| Conflict handling (product versions, same-name categories, permission rejections) | ✅ |
+| Sync status (Device tab + header badge) | ✅ |
+
+**Milestone:** "a completed offline transaction appears exactly once in the cloud database after
+reconnection" is met in the automated tests (fake cloud + PostgreSQL function tests + browser test with
+a faked Supabase). It still needs to be confirmed on the real Supabase project.
+
+Not yet: editing staff permissions in the app (owner can change `staff_profiles` in Supabase for now),
+revoking devices from the app, forced re-authentication after long offline periods, cloud copy of
+local settings (store name, receipt footer).
+
 ## Known gaps in Phase 1
 
-- Staff identity is a typed cashier name plus a device manager PIN; no passwords or server roles yet.
+- Without a cloud sign-in, staff identity is a typed cashier name plus the device manager PIN.
 - No cashier shifts / cash float yet (Phase 5).
 - No refunds of completed sales yet (they will be reversing records with approval).
 - No split payment.
@@ -51,8 +73,7 @@ with stock reduced, after closing and reopening the app offline.
 
 | Phase | Scope | Needs from owner |
 |---|---|---|
-| **2 Cloud sync** (next) | Supabase project, Auth for staff, device registration, `/api/sync/*` routes calling `sync_sale`, product/photo sync to Storage, sync status screen, conflict handling | Supabase project + keys |
-| 3 Inventory | Supplier purchases, batches, wastage, cost tracking, movement classification, coverage, sell-through | — |
+| 3 Inventory (next) | Supplier purchases, batches, wastage, cost tracking, movement classification, coverage, sell-through | — |
 | 4 Members & promotions | Member registration (no tiers), purchase history, promotions and rules, offline cache | — |
 | 5 Back Office & staff | Dashboards (Recharts), reports, expenses, permissions UI, shifts, audit, CSV | — |
 | 6 Printer | PT-210 test, BLE/Classic adapter or native bridge | The printer |

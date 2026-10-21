@@ -16,6 +16,7 @@ import {
 import { ensureDefaultCategories } from "@/lib/db/seed";
 import { hashPin, isValidPinFormat, verifyPin } from "@/lib/pin";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
+import { CloudSyncProvider } from "./cloud-sync";
 
 const UNLOCK_MS = 5 * 60 * 1000;
 
@@ -113,7 +114,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
 
   return (
     <PosContext.Provider value={value}>
-      {children}
+      <CloudSyncProvider ready={ready}>{children}</CloudSyncProvider>
       {pinRequest && (
         <PinDialog
           reason={pinRequest.reason}
