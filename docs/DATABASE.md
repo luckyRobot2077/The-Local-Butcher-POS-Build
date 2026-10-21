@@ -2,7 +2,9 @@
 
 ## Local database (IndexedDB via Dexie) — implemented
 
-Database name `local-butcher-pos`, local schema version **1** (`src/lib/db/db.ts`).
+Database name `local-butcher-pos`, local schema version **2** (`src/lib/db/db.ts`). Version 2 (Phase 3)
+adds the purchasing tables below and indexes movements by batch and purchase; Dexie upgrades version 1
+data in place.
 
 | Table | Key / indexes | Contents |
 |---|---|---|
@@ -14,12 +16,17 @@ Database name `local-butcher-pos`, local schema version **1** (`src/lib/db/db.ts
 | `sales` | id, &receiptNo, createdAt, businessDate, syncStatus | Sale headers |
 | `saleItems` | id, saleId, productId | Price/cost/name snapshots, gross, discounts, net |
 | `payments` | id, saleId | Method, amount, tendered, change, GCash reference |
-| `inventoryMovements` | id, productId, type, at, refId | Append-only stock ledger |
-| `outbox` | id, kind, status, entityId | Durable sync queue (sale, product, inventory_movement, product_image) |
+| `inventoryMovements` | id, productId, type, at, refId, batchId, purchaseId | Append-only stock ledger; `remote` marks rows downloaded from other devices |
+| `suppliers` | id, name | Supplier directory |
+| `purchases` | id, supplierId, receivedAt | Supplier deliveries; only `paymentStatus` changes later |
+| `purchaseItems` | id, purchaseId, productId, batchId | Quantity, unit cost, line cost |
+| `batches` | id, productId, purchaseId, useBy | One per purchase line: code, received, use-by, storage note, initial quantity, cost |
+| `remoteSaleLines` | id, saleId, productId, at | Sale lines from other devices, for profit and movement reports |
+| `outbox` | id, kind, status, entityId | Durable sync queue (sale, product, inventory_movement, product_image, supplier, purchase, purchase_payment) |
 | `auditLog` | id, action, at | Product edits, stock changes, discounts, prints |
 | `config` | key | `device`, `settings`, `cashierName`, `managerPin` (hash), `receiptSeq`, `lastExportAt`, `cloud` (signed-in identity), `syncMeta` |
 
-Future changes must add a new `this.version(n)` with an upgrade function; never edit version 1 in place.
+Future changes must add a new `this.version(n)` (with an upgrade function when data must change); never edit an existing version in place.
 
 ## Cloud database (Supabase PostgreSQL) — migrations written and tested locally
 
@@ -55,3 +62,17 @@ fresh database with all migrations applied.
 To apply to a real project later: `supabase link --project-ref <ref>` then `supabase db push`.
 
 Timestamps are `timestamptz` (UTC). `business_date` is the Asia/Manila calendar date.
+
+### Phase 3 — `20261023000005_inventory.sql`
+
+- Columns: `suppliers.updated_at`; `purchases.notes`, `by_name`, `device_id`, `synced_at`, `updated_at`;
+  `inventory_batches.store_id`, `purchase_id`, `synced_at`; indexes for the feed.
+- Immutability: purchase lines and batches cannot change; a purchase may change only its payment status.
+- Read policies: owner and manager read suppliers, purchases, purchase lines and batches (cashiers cannot).
+- Functions (security definer, role checked inside): `require_manager()`, `sync_supplier(p)` (upsert,
+  same-name merge), `sync_purchase(payload)` (purchase + batches + lines + `purchase` movements in one
+  transaction; idempotent via `sync_receipts`; line cost must equal quantity × unit cost, half-up for kg),
+  `set_purchase_payment(id, status)`, `sync_movement(m)` replaced to accept `batchId` and refuse
+  `purchase` movements, `inventory_feed(since, device)` (other devices' suppliers, purchases, lines,
+  batches, movements and sale lines changed after `since`, for owner/manager reports).
+

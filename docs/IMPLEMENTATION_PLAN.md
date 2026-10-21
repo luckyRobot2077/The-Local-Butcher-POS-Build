@@ -38,11 +38,11 @@ Legend: ✅ done and tested · 🟡 partial · ⬜ not started
 **Milestone met in automated test:** a cash sale is completed with the network cut, and is still there,
 with stock reduced, after closing and reopening the app offline.
 
-## Phase 2 — Cloud synchronization 🟡 (built and tested locally; waiting on the owner's Supabase project)
+## Phase 2 — Cloud synchronization ✅ (live: confirmed by the owner on 2026-10-21, first sync with 0 problems)
 
 | Item | Status |
 |---|---|
-| Supabase database (schema, RLS, functions) | ✅ migrations 1–4, tested on PostgreSQL 16; 🟡 not yet run on the real project |
+| Supabase database (schema, RLS, functions) | ✅ migrations 1–4, tested on PostgreSQL 16 and run on the real project |
 | Employee authentication (Supabase Auth email/password), owner bootstrap, add staff | ✅ |
 | Device registration | ✅ |
 | Durable outbox and sync engine with retry | ✅ |
@@ -54,11 +54,29 @@ with stock reduced, after closing and reopening the app offline.
 
 **Milestone:** "a completed offline transaction appears exactly once in the cloud database after
 reconnection" is met in the automated tests (fake cloud + PostgreSQL function tests + browser test with
-a faked Supabase). It still needs to be confirmed on the real Supabase project.
+a faked Supabase), and the owner's first real sync reported no problems.
 
 Not yet: editing staff permissions in the app (owner can change `staff_profiles` in Supabase for now),
 revoking devices from the app, forced re-authentication after long offline periods, cloud copy of
 local settings (store name, receipt footer).
+
+## Phase 3 — Inventory management ✅ (built and tested locally; migration 5 to be run on the real project)
+
+| Item | Status |
+|---|---|
+| Supplier directory and supplier purchases (reference, notes, payment status) | ✅ |
+| Stock movement ledger with purchase, delivery, return, spoilage, damage, trimming loss, correction | ✅ (ledger from Phase 1; purchases added) |
+| Batch records: lot code, received, use-by, storage note; waste linked to its batch | ✅ |
+| Cost tracking: line costs, purchase totals, optional weighted-average product cost, price log entry | ✅ |
+| Low-stock, stockout-soon, excess-stock, no-sales, wastage, demand and use-by alerts (expiry separate) | ✅ |
+| Fast / normal / slow / non-moving / new / too-few-to-compare classification, configurable | ✅ |
+| Stock coverage, sell-through, days since last sale, demand trend, wastage rate, gross profit; CSV | ✅ |
+| Order estimates (lead time, cover, safety stock, shelf life), never automatic orders | ✅ |
+| Whole-store reports on owner/manager devices (inventory feed from other devices) | ✅ |
+
+Not yet: carcass-to-cut conversion (the batch table keeps `parent_batch_id` for it), per-supplier lead
+times, supplier returns, editing a purchase after the fact (use a correction), sales velocity targets
+for small categories (they show "too few to compare" instead). Inventory rules are saved per device.
 
 ## Known gaps in Phase 1
 
@@ -73,8 +91,7 @@ local settings (store name, receipt footer).
 
 | Phase | Scope | Needs from owner |
 |---|---|---|
-| 3 Inventory (next) | Supplier purchases, batches, wastage, cost tracking, movement classification, coverage, sell-through | — |
-| 4 Members & promotions | Member registration (no tiers), purchase history, promotions and rules, offline cache | — |
+| 4 Members & promotions (next) | Member registration (no tiers), purchase history, promotions and rules, offline cache | — |
 | 5 Back Office & staff | Dashboards (Recharts), reports, expenses, permissions UI, shifts, audit, CSV | — |
 | 6 Printer | PT-210 test, BLE/Classic adapter or native bridge | The printer |
 | 7 Backup & recovery | Cloud export, scheduled backups, restore wizard with staging | Off-site storage |

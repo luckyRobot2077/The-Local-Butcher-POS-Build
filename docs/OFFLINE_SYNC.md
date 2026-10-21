@@ -32,13 +32,17 @@ server's store and the signed-in name becomes the cashier name on receipts.
 foreground, when the network comes back, and right after each sale. Never during checkout; a sale is
 complete once it is saved locally. One run at a time.
 
-**Push order** (foreign keys): categories → products → photos → manual stock movements → sales.
+**Push order** (foreign keys): categories → products → photos → suppliers → purchases → purchase
+payment status → manual stock movements → sales.
 
 | Outbox kind | Server call | Idempotency |
 |---|---|---|
 | category (all unsynced) | `sync_category` | matched by name; device adopts the server id |
 | product | `sync_product(p, base_version, reason)` | version check; `unchanged` if nothing differs |
 | product_image | Storage upload `<store>/<image>.jpg` + `sync_product_image` | same image id is a no-op |
+| supplier | `sync_supplier` | upsert by id; a new supplier with an existing name merges and the device adopts the server id |
+| purchase | `sync_purchase(payload)` (purchase, batches, lines, purchase movements) | purchase id + SHA-256 of payload |
+| purchase_payment | `set_purchase_payment` | sets the current status; repeating is harmless |
 | inventory_movement | `sync_movement` | primary key on movement id |
 | sale | `sync_sale(payload)` (header, items, payment, discounts, stock) | sale id + SHA-256 of payload |
 
@@ -52,8 +56,15 @@ permission).
 
 **Pull.** After pushing: categories, products and photo metadata (RLS limits these to the store), plus
 `store_stock()`. A product with unsent local edits is never overwritten. Missing photos are downloaded
-from Storage and kept for offline use. Local stock = server ledger + this device's unsent sales and
-movements.
+from Storage and kept for offline use. Local stock = server ledger + this device's unsent sales,
+purchases and movements.
+
+**Inventory feed (Phase 3, owner and manager devices).** After the pull, `inventory_feed(since, device)`
+returns what other devices recorded: suppliers, purchases (including payment status changes), purchase
+lines, batches, stock movements and sale lines. They are stored with `remote: true` so the inventory
+reports on this device cover the whole store. The cursor is the server time of the last download minus
+10 minutes; every row has a fixed id, so overlap never duplicates. If the feed is refused (for example
+the database update has not been run), sales and stock still sync and the Device tab shows the reason.
 
 ### Conflict rules
 - Sales, payments and stock movements are append-only; there is nothing to overwrite.

@@ -32,7 +32,12 @@ export class FakeCloud {
   files = new Map<string, Blob>();
   movements = new Map<string, Row>();
   sales = new Map<string, string>(); // id -> canonical payload
-  saleRows: Row[] = [];
+  saleRows: (Row & { receivedAt: string })[] = [];
+  suppliers = new Map<string, Row & { id: string; name: string; updated_at: string }>();
+  purchases = new Map<
+    string,
+    { canonical: string; payload: Row; paymentStatus: string; at: string; updatedAt: string }
+  >();
 
   api(): CloudApi {
     const guard = (name: string) => {
@@ -73,7 +78,145 @@ export class FakeCloud {
     for (const m of this.movements.values()) if (m.productId === productId) n += Number(m.qtyDelta);
     for (const s of this.saleRows)
       for (const it of s.items as Row[]) if (it.productId === productId) n -= Number(it.qty);
+    for (const p of this.purchases.values())
+      for (const l of p.payload.lines as Row[]) if (l.productId === productId) n += Number(l.qty);
     return n;
+  }
+
+  private supplierRow(p: Row) {
+    return {
+      id: String(p.id),
+      name: String(p.name).trim(),
+      contact: (p.contact as string) || null,
+      notes: (p.notes as string) || null,
+      active: p.active !== false,
+      updated_at: "",
+    };
+  }
+
+  private batchIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const p of this.purchases.values()) for (const l of p.payload.lines as Row[]) ids.add(String(l.batchId));
+    return ids;
+  }
+
+  /** Mirrors inventory_feed(): other devices' records changed after `since`. */
+  private feed(since: string | null, device: string) {
+    const after = (t: string) => !since || t > since;
+    const purchases = [...this.purchases.values()];
+    const own = (p: (typeof purchases)[number]) => (p.payload.purchase as Row).deviceId === device;
+    const lines = purchases
+      .filter((p) => after(p.at) && !own(p))
+      .flatMap((p) => (p.payload.lines as Row[]).map((l) => ({ p, l })));
+    return {
+      now: new Date().toISOString(),
+      suppliers: [...this.suppliers.values()].filter((s) => after(s.updated_at)),
+      purchases: purchases
+        .filter((p) => after(p.updatedAt))
+        .map((p) => {
+          const pur = p.payload.purchase as Row;
+          return {
+            id: pur.id,
+            supplier_id: pur.supplierId,
+            received_at: pur.receivedAt,
+            reference: pur.reference || null,
+            notes: pur.notes || null,
+            payment_status: p.paymentStatus,
+            total_cost: pur.totalCost,
+            by_name: pur.by,
+            device_id: pur.deviceId,
+          };
+        }),
+      purchase_items: lines.map(({ p, l }) => ({
+        id: l.itemId,
+        purchase_id: (p.payload.purchase as Row).id,
+        product_id: l.productId,
+        batch_id: l.batchId,
+        qty: l.qty,
+        unit_cost: l.unitCost,
+        line_cost: l.lineCost,
+      })),
+      batches: lines.map(({ p, l }) => ({
+        id: l.batchId,
+        product_id: l.productId,
+        purchase_id: (p.payload.purchase as Row).id,
+        batch_code: l.batchCode || null,
+        received_at: (p.payload.purchase as Row).receivedAt,
+        use_by: l.useBy || null,
+        storage_note: l.storageNote || null,
+        initial_qty: l.qty,
+        unit_cost: l.unitCost,
+      })),
+      movements: [
+        ...lines.map(({ p, l }) => ({
+          id: l.movementId,
+          product_id: l.productId,
+          batch_id: l.batchId,
+          type: "purchase",
+          qty_delta: l.qty,
+          unit_cost: l.unitCost,
+          ref_type: "purchase",
+          ref_id: (p.payload.purchase as Row).id,
+          reason: null,
+          batch_code: l.batchCode || null,
+          use_by: l.useBy || null,
+          by_name: (p.payload.purchase as Row).by,
+          at: (p.payload.purchase as Row).receivedAt,
+        })),
+        ...[...this.movements.values()]
+          .filter((m) => after(String(m.receivedAt)) && m.deviceId !== device)
+          .map((m) => ({
+            id: m.id,
+            product_id: m.productId,
+            batch_id: m.batchId || null,
+            type: m.type,
+            qty_delta: m.qtyDelta,
+            unit_cost: m.unitCost,
+            ref_type: null,
+            ref_id: null,
+            reason: m.reason ?? null,
+            batch_code: m.batchCode ?? null,
+            use_by: m.useBy || null,
+            by_name: m.by,
+            at: m.at,
+          })),
+        ...this.saleRows
+          .filter((s) => after(s.receivedAt) && (s.sale as Row).deviceId !== device)
+          .flatMap((s) =>
+            (s.items as Row[]).map((it) => ({
+              id: `${it.id}-move`,
+              product_id: it.productId,
+              batch_id: null,
+              type: "sale",
+              qty_delta: -Number(it.qty),
+              unit_cost: it.unitCost,
+              ref_type: "sale",
+              ref_id: (s.sale as Row).id,
+              reason: null,
+              batch_code: null,
+              use_by: null,
+              by_name: (s.sale as Row).cashierName,
+              at: (s.sale as Row).createdAt,
+            })),
+          ),
+      ],
+      sale_lines: this.saleRows
+        .filter((s) => after(s.receivedAt) && (s.sale as Row).deviceId !== device)
+        .flatMap((s) =>
+          (s.items as Row[]).map((it) => ({
+            id: it.id,
+            sale_id: (s.sale as Row).id,
+            product_id: it.productId,
+            qty: it.qty,
+            net: it.net,
+            cost:
+              it.saleUnit === "kg"
+                ? Math.floor((Number(it.unitCost) * Number(it.qty) + 500) / 1000)
+                : Number(it.unitCost) * Number(it.qty),
+            at: (s.sale as Row).createdAt,
+          })),
+        ),
+    };
   }
 
   private handle(fn: string, a: Record<string, unknown>): unknown {
@@ -153,10 +296,63 @@ export class FakeCloud {
       }
       case "sync_movement": {
         const m = a.m as Row;
+        if (m.type === "purchase")
+          throw new CloudRejection("purchase movements are synced with their purchase", "22023");
+        if (m.batchId && !this.batchIds().has(String(m.batchId)))
+          throw new CloudRejection("batch not synced yet", "23503");
         if (this.movements.has(String(m.id))) return "duplicate";
-        this.movements.set(String(m.id), m);
+        this.movements.set(String(m.id), { ...m, receivedAt: new Date().toISOString() });
         return "inserted";
       }
+      case "sync_supplier": {
+        const p = a.p as Row;
+        const id = String(p.id);
+        const now = new Date().toISOString();
+        if (this.suppliers.has(id)) {
+          this.suppliers.set(id, { ...this.supplierRow(p), updated_at: now });
+          return id;
+        }
+        const name = String(p.name).trim().toLowerCase();
+        const hit = [...this.suppliers.values()].find((x) => x.name.toLowerCase() === name);
+        if (hit) return hit.id;
+        this.suppliers.set(id, { ...this.supplierRow(p), updated_at: now });
+        return id;
+      }
+      case "sync_purchase": {
+        const payload = a.payload as Row;
+        const pur = payload.purchase as Row;
+        const id = String(pur.id);
+        const c = canonical(payload);
+        const prev = this.purchases.get(id);
+        if (prev) {
+          if (prev.canonical === c) return "duplicate";
+          throw new CloudRejection("purchase already synced with different content", "23505");
+        }
+        if (!this.suppliers.has(String(pur.supplierId))) throw new CloudRejection("supplier not synced yet", "23503");
+        let total = 0;
+        for (const l of payload.lines as Row[]) {
+          const prod = this.products.get(String(l.productId));
+          if (!prod) throw new CloudRejection("product not synced yet", "23503");
+          const qty = Number(l.qty);
+          const cost = Number(l.unitCost);
+          const line = prod.sale_unit === "kg" ? Math.floor((cost * qty + 500) / 1000) : cost * qty;
+          if (line !== l.lineCost) throw new CloudRejection("line cost does not match", "22023");
+          total += line;
+        }
+        if (total !== pur.totalCost) throw new CloudRejection("purchase total does not match its lines", "22023");
+        const now = new Date().toISOString();
+        this.purchases.set(id, { canonical: c, payload, paymentStatus: "unpaid", at: now, updatedAt: now });
+        return "inserted";
+      }
+      case "set_purchase_payment": {
+        const p = this.purchases.get(String(a.p_id));
+        if (!p) throw new CloudRejection("purchase not synced yet", "23503");
+        p.paymentStatus = String(a.p_status);
+        p.updatedAt = new Date().toISOString();
+        return a.p_status;
+      }
+      case "inventory_feed":
+        return this.feed(a.p_since as string | null, String(a.p_device));
       case "sync_sale": {
         const payload = a.payload as Row;
         const id = String((payload.sale as Row).id);
@@ -170,7 +366,7 @@ export class FakeCloud {
           if (!this.products.has(String(it.productId))) throw new CloudRejection("product missing", "23503");
         }
         this.sales.set(id, c);
-        this.saleRows.push(payload);
+        this.saleRows.push({ ...payload, receivedAt: new Date().toISOString() });
         return "inserted";
       }
       case "store_stock":

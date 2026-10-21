@@ -270,10 +270,10 @@ const DECREASE_TYPES: MovementType[] = ["damage", "spoilage", "trim_loss"];
  */
 export async function recordStockMovement(
   productId: string,
-  type: Exclude<MovementType, "sale">,
+  type: Exclude<MovementType, "sale" | "purchase">,
   qtyDelta: number,
   by: string,
-  extra: { reason?: string; batchCode?: string; useBy?: string; unitCost?: number } = {},
+  extra: { reason?: string; batchCode?: string; useBy?: string; unitCost?: number; batchId?: string } = {},
   db = getDb(),
 ): Promise<InventoryMovement> {
   if (!Number.isSafeInteger(qtyDelta) || qtyDelta === 0) throw new ProductError("Enter a quantity.");
@@ -282,15 +282,19 @@ export async function recordStockMovement(
   if ((type === "correction" || type === "other") && !extra.reason?.trim()) {
     throw new ProductError("A reason is required for corrections.");
   }
-  return db.transaction("rw", [db.products, db.inventoryMovements, db.outbox, db.auditLog], async () => {
+  if (extra.batchId && !DECREASE_TYPES.includes(type)) throw new ProductError("Only losses can name a batch.");
+  return db.transaction("rw", [db.products, db.inventoryMovements, db.outbox, db.auditLog, db.batches], async () => {
     const p = await db.products.get(productId);
     if (!p) throw new ProductError("Product not found.");
+    const batch = extra.batchId ? await db.batches.get(extra.batchId) : undefined;
+    if (extra.batchId && batch?.productId !== productId) throw new ProductError("That batch is not for this product.");
     const at = nowIso();
     const m = await writeMovement(db, p, type, qtyDelta, by, at, {
       reason: extra.reason?.trim() || undefined,
-      batchCode: extra.batchCode?.trim() || undefined,
       useBy: extra.useBy || undefined,
       unitCost: extra.unitCost ?? p.cost,
+      batchId: batch?.id,
+      batchCode: batch?.batchCode ?? (extra.batchCode?.trim() || undefined),
     });
     await db.auditLog.add({
       id: newId(),

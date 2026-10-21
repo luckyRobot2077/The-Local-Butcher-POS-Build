@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_INVENTORY_RULES } from "@/domain/inventory";
 import { getDb, type PosDatabase } from "./db";
 import { newId } from "./ids";
 
@@ -13,6 +14,22 @@ export const settingsSchema = z.object({
   allowItemAndOrderStacking: z.boolean(),
   /** Lets cashiers change product photos and descriptions without the manager PIN. */
   cashierCanEditPhotos: z.boolean(),
+  /** Thresholds for movement classification, alerts and order estimates (spec 11). */
+  inventoryRules: z.object({
+    periodDays: z.number().int().min(7).max(90),
+    fastPct: z.number().int().min(5).max(50),
+    slowPct: z.number().int().min(5).max(50),
+    minHistoryDays: z.number().int().min(1).max(90),
+    nonMovingDays: z.number().int().min(1).max(60),
+    minGroupSize: z.number().int().min(2).max(50),
+    trendPct: z.number().int().min(5).max(200),
+    stockoutDays: z.number().int().min(0).max(60),
+    excessCoverageDays: z.number().int().min(1).max(365),
+    useByWarnDays: z.number().int().min(0).max(30),
+    leadTimeDays: z.number().int().min(0).max(30),
+    orderCoverDays: z.number().int().min(1).max(60),
+    safetyDays: z.number().int().min(0).max(30),
+  }),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -24,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cashierDiscountLimitBp: 1000,
   allowItemAndOrderStacking: false,
   cashierCanEditPhotos: false,
+  inventoryRules: DEFAULT_INVENTORY_RULES,
 };
 
 export interface DeviceIdentity {
@@ -46,7 +64,11 @@ async function getValue<T>(db: PosDatabase, key: string): Promise<T | undefined>
 
 export async function getSettings(db = getDb()): Promise<Settings> {
   const stored = await getValue<Partial<Settings>>(db, "settings");
-  return { ...DEFAULT_SETTINGS, ...stored };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    inventoryRules: { ...DEFAULT_INVENTORY_RULES, ...stored?.inventoryRules },
+  };
 }
 
 export async function saveSettings(s: Settings, db = getDb()): Promise<void> {

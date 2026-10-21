@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0 — 2026-10-23 — Phase 3: inventory management
+
+### Added
+- POS → Inventory (manager PIN) with Alerts, Receive, Purchases, Movement and Rules tabs.
+- Supplier deliveries: one transaction writes the purchase, a batch per line (code, use-by, storage
+  note), purchase stock movements and the stock projection, and optionally moves product cost to the
+  weighted average. Payment status (not paid, partly, paid) is the only thing editable afterwards.
+- Losses (spoilage, damage, trimming) can name the batch they came from.
+- `src/domain/inventory.ts`: daily stock series, sales per day over in-stock days only, coverage,
+  sell-through, days since last sale, 7-vs-28-day demand trend, wastage rate and trend, gross profit,
+  classification within category and unit with configurable thresholds, batch estimates (earliest
+  use-by sold first), expiry and movement alerts kept separate, order estimates capped by shelf life.
+- Product details show last restock and batches on hand.
+- Supabase migration 5: supplier, purchase and payment sync functions, batch-aware `sync_movement`,
+  `inventory_feed` (other devices' purchases, batches, movements and sale lines for owner/manager
+  reports), read policies, immutable purchase lines and batches.
+- Local database schema version 2 (suppliers, purchases, purchase items, batches, sale lines from
+  other devices); existing data is kept on upgrade.
+- Tests: 12 analytics unit tests, 8 inventory database and sync tests, 17 PostgreSQL checks, 1 browser test.
+
+### Changed
+- A missing cloud function now reads "the cloud database needs an update" instead of a raw error, and a
+  refused inventory download no longer stops sales from syncing.
+
 ## 0.2.0 — 2026-10-22 — Phase 2: cloud sync
 
 ### Added

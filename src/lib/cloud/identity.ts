@@ -23,6 +23,10 @@ export interface SyncMeta {
   lastAttemptAt?: string;
   lastError?: string;
   running?: boolean;
+  /** Server time of the last inventory feed download (owner/manager devices). */
+  feedCursor?: string;
+  /** Why the inventory feed could not be downloaded; sales and stock still sync. */
+  feedError?: string;
 }
 
 export async function getCloudIdentity(db = getDb()): Promise<CloudIdentity | undefined> {

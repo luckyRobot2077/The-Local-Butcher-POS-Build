@@ -55,6 +55,12 @@ test("offline cash sale survives an app restart", async ({ page, context }) => {
   await expect(again.getByTestId("product-row").filter({ hasText: "Liempo" })).toContainText("7.750 kg in stock");
   await expect(again.getByTestId("product-row").filter({ hasText: "Whole Chicken" })).toContainText("13 pcs in stock");
 
+  // The inventory screen also opens offline (straight from the device cache).
+  const inv = await context.newPage();
+  await inv.goto("/pos/inventory?tab=receive");
+  await expect(inv.getByTestId("reachability")).toHaveText("Offline");
+  await expect(inv.getByText("Inventory shows costs, suppliers and profit")).toBeVisible();
+
   await context.setOffline(false);
 });
 

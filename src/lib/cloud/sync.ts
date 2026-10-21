@@ -1,15 +1,26 @@
 import type { PaymentRecord, SaleItemRecord, SaleRecord } from "@/domain/checkout";
 import { getDb, type PosDatabase } from "@/lib/db/db";
 import { nowIso } from "@/lib/db/ids";
-import type { InventoryMovement, OutboxEntry, Product } from "@/lib/db/types";
+import type {
+  InventoryBatch,
+  InventoryMovement,
+  MovementType,
+  OutboxEntry,
+  PaymentStatus,
+  Product,
+  Purchase,
+  PurchaseItem,
+  Supplier,
+} from "@/lib/db/types";
 import { CloudRejection, CloudUnavailable, type CloudApi } from "./api";
-import { getCloudIdentity, patchSyncMeta } from "./identity";
+import { getCloudIdentity, getSyncMeta, patchSyncMeta } from "./identity";
 
 /**
  * Pushes the device outbox to Supabase and pulls the shared catalog back.
  *
  * Order matters because of foreign keys on the server:
- *   categories → products → photos → stock movements → sales → pull.
+ *   categories → products → photos → suppliers → purchases → payment
+ *   status → stock movements → sales → pull → inventory feed.
  *
  * Outcomes per outbox entry:
  *   - accepted or already there (idempotent) → status "sent"
@@ -25,9 +36,13 @@ export interface SyncReport {
   photos: number;
   movements: number;
   sales: number;
+  suppliers: number;
+  purchases: number;
   failed: number;
   conflicts: number;
   pulledProducts: number;
+  /** Records from other devices downloaded by the inventory feed. */
+  pulledRecords: number;
 }
 
 interface ServerProduct {
@@ -83,18 +98,34 @@ async function doSync(api: CloudApi, db: PosDatabase): Promise<SyncReport> {
     photos: 0,
     movements: 0,
     sales: 0,
+    suppliers: 0,
+    purchases: 0,
     failed: 0,
     conflicts: 0,
     pulledProducts: 0,
+    pulledRecords: 0,
   };
   await patchSyncMeta({ lastAttemptAt: nowIso(), running: true }, db);
   try {
     await pushCategories(api, db, report);
     await pushProducts(api, db, report);
     await pushPhotos(api, db, identity.storeId, report);
+    await pushSuppliers(api, db, report);
+    await pushPurchases(api, db, device.deviceId, report);
+    await pushPurchasePayments(api, db, report);
     await pushMovements(api, db, device.deviceId, report);
     await pushSales(api, db, report);
     await pull(api, db, report);
+    if (identity.role !== "cashier") {
+      // Reports only: a rejection here (e.g. the database update not run yet) must not hold up sales.
+      try {
+        await pullInventoryFeed(api, db, device.deviceId, report);
+        await patchSyncMeta({ feedError: undefined }, db);
+      } catch (e) {
+        if (!(e instanceof CloudRejection)) throw e;
+        await patchSyncMeta({ feedError: e.message }, db);
+      }
+    }
     await patchSyncMeta({ lastSyncAt: nowIso(), lastError: undefined, running: false }, db);
     return report;
   } catch (e) {
@@ -268,6 +299,120 @@ async function pushPhotos(api: CloudApi, db: PosDatabase, storeId: string, repor
   }
 }
 
+export function supplierPayload(s: Supplier) {
+  return { id: s.id, name: s.name, contact: s.contact ?? "", notes: s.notes ?? "", active: s.active };
+}
+
+async function pushSuppliers(api: CloudApi, db: PosDatabase, report: SyncReport) {
+  const groups = groupBy(await pendingEntries(db, "supplier"), (e) => e.entityId);
+  for (const [supplierId, entries] of groups) {
+    const s = await db.suppliers.get(supplierId);
+    if (!s) {
+      await mark(db, entries, "sent", "Supplier no longer on this device");
+      continue;
+    }
+    let serverId: string | undefined;
+    const ok = await attempt(db, entries, report, async () => {
+      serverId = await api.rpc<string>("sync_supplier", { p: supplierPayload(s) });
+    });
+    if (!ok || !serverId) continue;
+    if (serverId !== supplierId) await remapSupplier(db, supplierId, serverId);
+    await mark(db, entries, "sent");
+    report.suppliers++;
+  }
+}
+
+/** Another device already had a supplier with this name: use the cloud's record. */
+export async function remapSupplier(db: PosDatabase, localId: string, serverId: string) {
+  await db.transaction("rw", [db.suppliers, db.purchases], async () => {
+    const local = await db.suppliers.get(localId);
+    await db.suppliers.delete(localId);
+    if (local && !(await db.suppliers.get(serverId))) await db.suppliers.add({ ...local, id: serverId });
+    await db.purchases.where("supplierId").equals(localId).modify({ supplierId: serverId });
+  });
+}
+
+/** The exact payload for sync_purchase: immutable fields only, so a retry hashes the same. */
+export function purchasePayload(
+  p: Purchase,
+  items: PurchaseItem[],
+  batches: InventoryBatch[],
+  movements: InventoryMovement[],
+  deviceId: string,
+) {
+  const batchById = new Map(batches.map((b) => [b.id, b]));
+  const moveByBatch = new Map(movements.map((m) => [m.batchId, m]));
+  return {
+    purchase: {
+      id: p.id,
+      supplierId: p.supplierId,
+      receivedAt: p.receivedAt,
+      reference: p.reference ?? "",
+      notes: p.notes ?? "",
+      totalCost: p.totalCost,
+      by: p.by,
+      deviceId: p.deviceId ?? deviceId,
+    },
+    lines: items
+      .slice()
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((i) => {
+        const b = batchById.get(i.batchId);
+        const m = moveByBatch.get(i.batchId);
+        if (!b || !m) throw new CloudRejection("Purchase records incomplete on this device");
+        return {
+          itemId: i.id,
+          batchId: b.id,
+          movementId: m.id,
+          productId: i.productId,
+          qty: i.qty,
+          unitCost: i.unitCost,
+          lineCost: i.lineCost,
+          batchCode: b.batchCode ?? "",
+          useBy: b.useBy ?? "",
+          storageNote: b.storageNote ?? "",
+        };
+      }),
+  };
+}
+
+async function pushPurchases(api: CloudApi, db: PosDatabase, deviceId: string, report: SyncReport) {
+  for (const entry of await pendingEntries(db, "purchase")) {
+    const p = await db.purchases.get(entry.entityId);
+    if (!p) {
+      await mark(db, [entry], "failed", "Purchase missing on this device");
+      report.failed++;
+      continue;
+    }
+    const [items, batches, movements] = await Promise.all([
+      db.purchaseItems.where("purchaseId").equals(p.id).toArray(),
+      db.batches.where("purchaseId").equals(p.id).toArray(),
+      db.inventoryMovements.where("purchaseId").equals(p.id).toArray(),
+    ]);
+    const ok = await attempt(db, [entry], report, async () => {
+      await api.rpc<string>("sync_purchase", { payload: purchasePayload(p, items, batches, movements, deviceId) });
+    });
+    if (!ok) continue;
+    await mark(db, [entry], "sent");
+    report.purchases++;
+  }
+}
+
+async function pushPurchasePayments(api: CloudApi, db: PosDatabase, report: SyncReport) {
+  const groups = groupBy(await pendingEntries(db, "purchase_payment"), (e) => e.entityId);
+  for (const [purchaseId, entries] of groups) {
+    const p = await db.purchases.get(purchaseId);
+    if (!p) {
+      await mark(db, entries, "sent", "Purchase no longer on this device");
+      continue;
+    }
+    const ok = await attempt(db, entries, report, async () => {
+      await api.rpc<string>("set_purchase_payment", { p_id: p.id, p_status: p.paymentStatus });
+    });
+    if (ok) await mark(db, entries, "sent");
+  }
+}
+
 export function movementPayload(m: InventoryMovement, deviceId: string) {
   return {
     id: m.id,
@@ -278,6 +423,7 @@ export function movementPayload(m: InventoryMovement, deviceId: string) {
     reason: m.reason ?? null,
     batchCode: m.batchCode ?? null,
     useBy: m.useBy ?? "",
+    batchId: m.batchId ?? "",
     at: m.at,
     by: m.by,
     deviceId,
@@ -429,17 +575,23 @@ function fromServer(sp: ServerProduct, local: Product | undefined): Product {
   };
 }
 
-/** Stock not yet reflected on the server: unsynced sales and unsent manual movements. */
-async function localPendingDeltas(db: PosDatabase): Promise<Map<string, number>> {
+/** Stock not yet reflected on the server: unsynced sales, purchases and manual movements. */
+export async function localPendingDeltas(db: PosDatabase): Promise<Map<string, number>> {
   const unsyncedSales = new Set((await db.sales.toArray()).filter((s) => s.syncStatus !== "synced").map((s) => s.id));
-  const unsentMoves = new Set(
-    (await db.outbox.where("kind").equals("inventory_movement").toArray())
+  const unsent = new Set(
+    (await db.outbox.where("kind").anyOf("inventory_movement", "purchase").toArray())
       .filter((e) => e.status !== "sent")
       .map((e) => e.entityId),
   );
   const out = new Map<string, number>();
   for (const m of await db.inventoryMovements.toArray()) {
-    const pending = m.type === "sale" ? !!m.refId && unsyncedSales.has(m.refId) : unsentMoves.has(m.id);
+    if (m.remote) continue;
+    const pending =
+      m.type === "sale"
+        ? !!m.refId && unsyncedSales.has(m.refId)
+        : m.purchaseId
+          ? unsent.has(m.purchaseId)
+          : unsent.has(m.id);
     if (pending) out.set(m.productId, (out.get(m.productId) ?? 0) + m.qtyDelta);
   }
   return out;
@@ -524,6 +676,194 @@ async function pull(api: CloudApi, db: PosDatabase, report: SyncReport) {
       await db.products.update(sp.id, { stockQty });
     }
   });
+}
+
+/* ------------------------------------------------------------------ inventory feed */
+
+interface InventoryFeed {
+  now: string;
+  suppliers: {
+    id: string;
+    name: string;
+    contact: string | null;
+    notes: string | null;
+    active: boolean;
+    updated_at: string;
+  }[];
+  purchases: {
+    id: string;
+    supplier_id: string;
+    received_at: string;
+    reference: string | null;
+    notes: string | null;
+    payment_status: PaymentStatus;
+    total_cost: number;
+    by_name: string | null;
+    device_id: string | null;
+  }[];
+  purchase_items: {
+    id: string;
+    purchase_id: string;
+    product_id: string;
+    batch_id: string;
+    qty: number;
+    unit_cost: number;
+    line_cost: number;
+  }[];
+  batches: {
+    id: string;
+    product_id: string;
+    purchase_id: string | null;
+    batch_code: string | null;
+    received_at: string;
+    use_by: string | null;
+    storage_note: string | null;
+    initial_qty: number;
+    unit_cost: number;
+  }[];
+  movements: {
+    id: string;
+    product_id: string;
+    batch_id: string | null;
+    type: MovementType;
+    qty_delta: number;
+    unit_cost: number;
+    ref_type: string | null;
+    ref_id: string | null;
+    reason: string | null;
+    batch_code: string | null;
+    use_by: string | null;
+    by_name: string | null;
+    at: string;
+  }[];
+  sale_lines: { id: string; sale_id: string; product_id: string; qty: number; net: number; cost: number; at: string }[];
+}
+
+/** Overlap between feed downloads, so rows committed late are not missed (ids make it idempotent). */
+const FEED_OVERLAP_MS = 10 * 60_000;
+
+/**
+ * Downloads what other devices recorded (purchases, batches, stock
+ * movements and sale lines) so this device's inventory reports cover the
+ * whole store. Owner and manager devices only.
+ */
+async function pullInventoryFeed(api: CloudApi, db: PosDatabase, deviceId: string, report: SyncReport) {
+  const { feedCursor } = await getSyncMeta(db);
+  const since = feedCursor ? new Date(Date.parse(feedCursor) - FEED_OVERLAP_MS).toISOString() : null;
+  const feed = await api.rpc<InventoryFeed>("inventory_feed", { p_since: since, p_device: deviceId });
+  const dirty = new Set(
+    (await db.outbox.where("kind").anyOf("supplier", "purchase_payment").toArray())
+      .filter((e) => e.status !== "sent")
+      .map((e) => e.entityId),
+  );
+  const tables = [
+    db.suppliers,
+    db.purchases,
+    db.purchaseItems,
+    db.batches,
+    db.inventoryMovements,
+    db.remoteSaleLines,
+    db.sales,
+  ];
+  await db.transaction("rw", tables, async () => {
+    let n = 0;
+    for (const s of feed.suppliers) {
+      if (dirty.has(s.id)) continue;
+      await db.suppliers.put({
+        id: s.id,
+        name: s.name,
+        contact: s.contact ?? undefined,
+        notes: s.notes ?? undefined,
+        active: s.active,
+        updatedAt: s.updated_at,
+      });
+      n++;
+    }
+    for (const p of feed.purchases) {
+      const local = await db.purchases.get(p.id);
+      if (local) {
+        if (!dirty.has(p.id) && local.paymentStatus !== p.payment_status) {
+          await db.purchases.update(p.id, { paymentStatus: p.payment_status });
+          n++;
+        }
+        continue;
+      }
+      await db.purchases.add({
+        id: p.id,
+        supplierId: p.supplier_id,
+        receivedAt: p.received_at,
+        reference: p.reference ?? undefined,
+        notes: p.notes ?? undefined,
+        paymentStatus: p.payment_status,
+        totalCost: Number(p.total_cost),
+        by: p.by_name ?? "",
+        deviceId: p.device_id ?? undefined,
+        remote: true,
+      });
+      n++;
+    }
+    for (const i of feed.purchase_items) {
+      if (await db.purchaseItems.get(i.id)) continue;
+      await db.purchaseItems.add({
+        id: i.id,
+        purchaseId: i.purchase_id,
+        productId: i.product_id,
+        batchId: i.batch_id,
+        qty: Number(i.qty),
+        unitCost: Number(i.unit_cost),
+        lineCost: Number(i.line_cost),
+      });
+    }
+    for (const b of feed.batches) {
+      if (await db.batches.get(b.id)) continue;
+      await db.batches.add({
+        id: b.id,
+        productId: b.product_id,
+        purchaseId: b.purchase_id ?? undefined,
+        batchCode: b.batch_code ?? undefined,
+        receivedAt: b.received_at,
+        useBy: b.use_by ?? undefined,
+        storageNote: b.storage_note ?? undefined,
+        initialQty: Number(b.initial_qty),
+        unitCost: Number(b.unit_cost),
+      });
+    }
+    for (const m of feed.movements) {
+      if (await db.inventoryMovements.get(m.id)) continue;
+      await db.inventoryMovements.add({
+        id: m.id,
+        productId: m.product_id,
+        type: m.type,
+        qtyDelta: Number(m.qty_delta),
+        unitCost: Number(m.unit_cost),
+        refType: m.ref_type === "sale" ? "sale" : undefined,
+        refId: m.ref_id ?? undefined,
+        purchaseId: m.ref_type === "purchase" ? (m.ref_id ?? undefined) : undefined,
+        batchId: m.batch_id ?? undefined,
+        reason: m.reason ?? undefined,
+        batchCode: m.batch_code ?? undefined,
+        useBy: m.use_by ?? undefined,
+        by: m.by_name ?? "",
+        at: m.at,
+        remote: true,
+      });
+      n++;
+    }
+    for (const l of feed.sale_lines) {
+      if (await db.sales.get(l.sale_id)) continue;
+      await db.remoteSaleLines.put({
+        id: l.id,
+        saleId: l.sale_id,
+        productId: l.product_id,
+        qty: Number(l.qty),
+        net: Number(l.net),
+        cost: Number(l.cost),
+        at: l.at,
+      });
+    }
+    report.pulledRecords += n;
+  });
+  await patchSyncMeta({ feedCursor: feed.now }, db);
 }
 
 /* ------------------------------------------------------------------ manual resolution */
