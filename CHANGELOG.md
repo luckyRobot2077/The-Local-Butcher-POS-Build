@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.4 — 2026-10-22 — Sale sync fix
+
+### Fixed
+- Sales and supplier purchases could not upload to Supabase ("function digest(text, unknown) does not
+  exist"): Supabase keeps pgcrypto in the `extensions` schema, which these functions did not search.
+  Supabase migration 8 fixes it; nothing on the devices changes and the waiting items upload on retry.
+- The migration tests now install pgcrypto in `extensions` like Supabase, so this is caught.
+
 ## 0.4.3 — 2026-10-22 — Prices on the product list, starter pictures, socials
 
 ### Added
