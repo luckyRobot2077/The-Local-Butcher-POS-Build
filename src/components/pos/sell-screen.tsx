@@ -21,7 +21,8 @@ import {
 } from "@/domain/cart";
 import { describeDiscount } from "@/domain/discount";
 import { applyProgram, describeProgram, isProgramCurrent } from "@/domain/programs";
-import { businessDate } from "@/domain/time";
+import { businessDate, formatManila } from "@/domain/time";
+import { memberVisitSummary } from "@/lib/db/members";
 import { listPrograms } from "@/lib/db/programs";
 import { Button, ErrorText, Modal } from "@/components/ui";
 import { usePos } from "./pos-context";
@@ -275,6 +276,7 @@ export function SellScreen() {
                 <span>
                   <span className="font-semibold">Member:</span> {cart.member.name}{" "}
                   <span className="font-mono text-xs text-charcoal-500">{cart.member.memberNo}</span>
+                  <MemberVisits memberId={cart.member.id} />
                 </span>
                 <button
                   type="button"
@@ -609,5 +611,23 @@ function EmptyCatalog() {
         </Button>
       </div>
     </div>
+  );
+}
+
+/** "Visit #6 · last came Oct 20": this sale counts as the next visit. */
+function MemberVisits({ memberId }: { memberId: string }) {
+  const summary = useLiveQuery(() => memberVisitSummary(memberId), [memberId]);
+  if (!summary) return null;
+  return (
+    <span className="block text-xs text-charcoal-700" data-testid="member-visits">
+      {summary.visits === 0 ? (
+        <span className="font-semibold text-navy-800">First visit</span>
+      ) : (
+        <>
+          <span className="font-semibold text-navy-800">Visit #{summary.visits + 1}</span>
+          {summary.lastAt && <> · last came {formatManila(summary.lastAt).split(",").slice(0, 2).join(",")}</>}
+        </>
+      )}
+    </span>
   );
 }

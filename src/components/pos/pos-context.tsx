@@ -17,6 +17,14 @@ import { ensureDefaultCategories } from "@/lib/db/seed";
 import { hashPin, isValidPinFormat, verifyPin } from "@/lib/pin";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
 import { CloudSyncProvider } from "./cloud-sync";
+import {
+  approversWithCode,
+  badgeSignInEnabled,
+  getEmployees,
+  toSignedIn,
+  type SignedInEmployee,
+} from "@/lib/staff/employees";
+import { ApproveWithCodeDialog, StaffSignInDialog } from "./staff-dialogs";
 
 const UNLOCK_MS = 5 * 60 * 1000;
 
@@ -31,6 +39,9 @@ interface PosContextValue {
   requestManager: (reason: string) => Promise<boolean>;
   lockManager: () => void;
   changeCashier: () => void;
+  /** The employee signed in with their badge, once the shop uses employee IDs. */
+  employee?: SignedInEmployee;
+  badgeSignIn: boolean;
   storagePersisted?: boolean;
 }
 
@@ -54,6 +65,9 @@ export function PosProvider({ children }: { children: ReactNode }) {
   const lockTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [pinRequest, setPinRequest] = useState<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
   const [askCashier, setAskCashier] = useState(false);
+  const employees = useLiveQuery(() => getEmployees(), []);
+  const [employee, setEmployee] = useState<SignedInEmployee>();
+  const badgeSignIn = !!employees && badgeSignInEnabled(employees);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,16 +120,44 @@ export function PosProvider({ children }: { children: ReactNode }) {
     managerUnlocked,
     requestManager,
     lockManager: lock,
-    changeCashier: () => setAskCashier(true),
+    changeCashier: () => {
+      if (!badgeSignIn) return setAskCashier(true);
+      lock();
+      setEmployee(undefined);
+    },
+    employee,
+    badgeSignIn,
     storagePersisted,
   };
 
-  const needCashier = ready && cashierName !== undefined && !cashierName;
+  const needCashier = ready && cashierName !== undefined && !cashierName && !badgeSignIn;
+  const needBadge = ready && badgeSignIn && !employee;
+  const approvers = employees ? approversWithCode(employees) : [];
 
   return (
     <PosContext.Provider value={value}>
       <CloudSyncProvider ready={ready}>{children}</CloudSyncProvider>
-      {pinRequest && (
+      {needBadge && (
+        <StaffSignInDialog
+          onSignedIn={(e) => {
+            setEmployee(toSignedIn(e));
+            void setCashierName(e.name);
+          }}
+        />
+      )}
+      {pinRequest && approvers.length > 0 && (
+        <ApproveWithCodeDialog
+          reason={pinRequest.reason}
+          current={employee}
+          approvers={approvers}
+          onDone={(by) => {
+            if (by) unlock();
+            pinRequest.resolve(!!by);
+            setPinRequest(null);
+          }}
+        />
+      )}
+      {pinRequest && approvers.length === 0 && (
         <PinDialog
           reason={pinRequest.reason}
           onDone={(ok) => {
@@ -125,7 +167,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
           }}
         />
       )}
-      {(needCashier || askCashier) && (
+      {(needCashier || (askCashier && !badgeSignIn)) && (
         <CashierDialog current={cashierName ?? ""} canCancel={!needCashier} onClose={() => setAskCashier(false)} />
       )}
     </PosContext.Provider>

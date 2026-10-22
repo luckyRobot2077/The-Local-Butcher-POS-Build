@@ -68,6 +68,7 @@ test("discount program and member card: register, attach to a sale, see history"
   await page.getByTestId("member-search").fill(memberNo.toLowerCase());
   await page.getByTestId("member-search").press("Enter");
   await expect(page.getByTestId("sale-member")).toContainText("Maria Santos");
+  await expect(page.getByTestId("member-visits")).toHaveText("First visit");
   await expect(page.getByTestId("program-note")).toHaveCount(0);
   await expect(page.getByTestId("cart-total")).toHaveText("₱315.00");
 
@@ -84,6 +85,15 @@ test("discount program and member card: register, attach to a sale, see history"
   await page.getByRole("link", { name: "Members" }).click();
   await page.getByTestId("member-list").getByText("Maria Santos").click();
   await expect(page.getByTestId("member-summary")).toContainText("1 visit · ₱315.00");
+
+  // Next time at the counter, the cashier sees this is the member's second visit.
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Sell" }).click();
+  await page.getByTestId("add-member").click();
+  await page.getByTestId("member-search").fill(memberNo);
+  await page.getByTestId("member-search").press("Enter");
+  await expect(page.getByTestId("member-visits")).toContainText("Visit #2 · last came");
+  await page.getByRole("link", { name: "Members" }).click();
 
   // Insights (manager) count the member sale.
   await page.keyboard.press("Escape");

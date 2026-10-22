@@ -106,6 +106,10 @@ test("sign in, register the device and sync a sale exactly once", async ({ page 
           });
         case "members_feed":
           return json(200, { now: new Date().toISOString(), customers: [], promotions: [] });
+        case "member_visits":
+          return json(200, []);
+        case "employees_feed":
+          return json(200, { now: new Date().toISOString(), employees: [] });
       }
       return json(404, { code: "PGRST202", message: `no function ${fn}` });
     }

@@ -17,6 +17,10 @@ export interface CardData {
   tagline?: string;
   /** Printed under the QR code with small icons; empty ones are left off. */
   socials?: { facebook?: string; tiktok?: string; whatsapp?: string };
+  /** Employee badges reuse the card: their own QR text, heading and band note. */
+  qrText?: string;
+  heading?: string;
+  footer?: string;
 }
 
 type Social = "facebook" | "tiktok" | "whatsapp";
@@ -134,7 +138,7 @@ export async function renderMemberCard(d: CardData): Promise<string> {
   const qrX = CARD_WIDTH_PX - 400 - 40 + Math.round((400 - qrSize) / 2);
   const qrY = socials.length ? 22 : Math.round((bandY - qrSize) / 2);
   const qrCanvas = document.createElement("canvas");
-  await QRCode.toCanvas(qrCanvas, memberQrPayload(d.memberId), {
+  await QRCode.toCanvas(qrCanvas, d.qrText ?? memberQrPayload(d.memberId), {
     errorCorrectionLevel: "M",
     margin: 2,
     width: qrSize,
@@ -158,7 +162,7 @@ export async function renderMemberCard(d: CardData): Promise<string> {
   ctx.fillStyle = RED;
   ctx.font = `bold 26px ${SANS}`;
   spaced(ctx, 8);
-  ctx.fillText("MEMBER", 48, 382);
+  ctx.fillText(d.heading ?? "MEMBER", 48, 382);
   spaced(ctx, 0);
   ctx.fillStyle = NAVY;
   // Up to two lines; the font shrinks until the longest word fits.
@@ -191,7 +195,7 @@ export async function renderMemberCard(d: CardData): Promise<string> {
   spaced(ctx, 0);
   ctx.font = `22px ${SANS}`;
   ctx.textAlign = "right";
-  ctx.fillText("Show this card at the counter", CARD_WIDTH_PX - 40, 622);
+  ctx.fillText(d.footer ?? "Show this card at the counter", CARD_WIDTH_PX - 40, 622);
   ctx.textAlign = "left";
 
   return canvas.toDataURL("image/png");

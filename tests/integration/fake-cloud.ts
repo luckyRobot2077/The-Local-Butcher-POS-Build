@@ -32,6 +32,7 @@ export class FakeCloud {
   files = new Map<string, Blob>();
   movements = new Map<string, Row>();
   sales = new Map<string, string>(); // id -> canonical payload
+  employees: Record<string, unknown>[] = [];
   saleRows: (Row & { receivedAt: string })[] = [];
   suppliers = new Map<string, Row & { id: string; name: string; updated_at: string }>();
   customers = new Map<string, Row & { id: string; updated_at: string }>();
@@ -442,6 +443,20 @@ export class FakeCloud {
         this.saleRows.push({ ...payload, receivedAt: new Date().toISOString() });
         return "inserted";
       }
+      case "member_visits": {
+        const counts = new Map<string, { visits: number; last_at: string }>();
+        for (const json of this.sales.values()) {
+          const sale = (JSON.parse(json) as { sale: { customerId?: string | null; createdAt: string } }).sale;
+          if (!sale.customerId) continue;
+          const c = counts.get(sale.customerId) ?? { visits: 0, last_at: sale.createdAt };
+          c.visits++;
+          if (sale.createdAt > c.last_at) c.last_at = sale.createdAt;
+          counts.set(sale.customerId, c);
+        }
+        return [...counts].map(([customer_id, c]) => ({ customer_id, ...c }));
+      }
+      case "employees_feed":
+        return { now: new Date().toISOString(), employees: this.employees };
       case "store_stock":
         return [...this.products.keys()].map((id) => ({ product_id: id, stock_qty: this.stockOf(id) }));
       default:

@@ -4,7 +4,14 @@ import { PosDatabase } from "@/lib/db/db";
 import { ensureDevice } from "@/lib/db/config";
 import { ensureDefaultCategories, loadSampleCatalog } from "@/lib/db/seed";
 import { completeSale } from "@/lib/db/sales";
-import { findMemberByCode, memberHistory, registerMember, saleFacts, updateMember } from "@/lib/db/members";
+import {
+  findMemberByCode,
+  memberHistory,
+  memberVisitSummary,
+  registerMember,
+  saleFacts,
+  updateMember,
+} from "@/lib/db/members";
 import { saveProgram, type ProgramInput } from "@/lib/db/programs";
 import { priceCart, type Cart, type CartLine } from "@/domain/cart";
 import { applyProgram } from "@/domain/programs";
@@ -279,12 +286,32 @@ describe("members and programs sync", () => {
     await runSync(cloud.api(), counter);
     expect((await findMemberByCode(memberQrPayload(m.id), counter))?.name).toBe("Maria Santos");
     expect((await counter.programs.get(prog.id))?.input).toEqual({ kind: "percent", basisPoints: 1000 });
+    // The counter knows the member has been once, though the sale was made on another device.
+    expect(await memberVisitSummary(m.id, counter)).toEqual({ visits: 1, lastAt: sale.createdAt });
+
+    // A sale on the counter counts straight away, before it is uploaded.
+    const plain = priceCart({ lines: [line(belly, 500)] });
+    const second = await completeSale(
+      {
+        totals: plain,
+        payment: { method: "cash", tendered: plain.total },
+        cashierName: "Ana",
+        member: { id: m.id, memberNo: m.memberNo },
+      },
+      counter,
+    );
+    expect(await memberVisitSummary(m.id, counter)).toEqual({ visits: 2, lastAt: second.createdAt });
+    await runSync(cloud.api(), counter);
+    expect((await memberVisitSummary(m.id, counter)).visits).toBe(2);
 
     // A manager's tablet also sees the member's purchase from the other device.
     const office = await device("manager");
     await runSync(cloud.api(), office);
     const h = await memberHistory(m.id, office);
-    expect(h.visits).toEqual([expect.objectContaining({ saleId: sale.id, total: sale.total, remote: true })]);
+    expect(h.visits).toHaveLength(2);
+    expect(h.visits).toEqual(
+      expect.arrayContaining([expect.objectContaining({ saleId: sale.id, total: sale.total, remote: true })]),
+    );
 
     // Edits made on the counter flow back; nothing is sent twice.
     const local = (await counter.members.get(m.id))!;

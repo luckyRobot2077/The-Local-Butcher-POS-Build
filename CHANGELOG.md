@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.0 — 2026-10-23 — Employee IDs, authenticator codes, member visits
+
+### Added
+- Employee IDs: every employee, owner to cashier, gets an employee number (E-0001…), a printed QR
+  badge and a personal PIN. Once the shop has employees, the POS opens only after a badge scan
+  (camera or handheld scanner) and the PIN; "Sign out" in the header hands the counter to the next
+  person, and receipts carry the signed-in name. Five wrong PINs pause that badge for a minute.
+- Google Authenticator for owners and managers. Price and cost changes, big discounts and other
+  manager actions on the POS need an owner or manager badge plus the 6-digit code (each code works
+  once). This works offline. Until someone links the app, the old manager PIN still works.
+- Back Office now opens only with an owner or manager badge plus an authenticator code (12-hour
+  session per browser tab, Lock button, 10-minute lockout after 8 wrong tries). The first time, the
+  owner account walks through creating the owner ID, printing the badge and linking the app.
+- Back Office → Staff (owner): add employees, set roles and PINs, issue new badges (the old one
+  stops working), link or relink authenticator apps, deactivate.
+- Sell screen: a scanned member shows "Visit #N · last came …", counting sales from every device.
+- "Every sale line" CSV: which discount was given on each line (program or reason and its size,
+  "whole sale" for order discounts), the item discount, the share of a whole-sale discount, and who
+  approved it.
+- Supabase migration 10 (`20261028000010_staff_ids_and_visits.sql`), safe to run twice.
+
+### Security notes
+- Badge QR text is never stored anywhere; the server and devices keep only its SHA-256.
+- PINs are hashed on the device (PBKDF2-SHA256, 210,000 rounds). Devices of the shop download the
+  PIN hashes and the owners'/managers' authenticator secrets so they can check them offline.
+
 ## 0.5.0 — 2026-10-22 — Back Office reports
 
 ### Added

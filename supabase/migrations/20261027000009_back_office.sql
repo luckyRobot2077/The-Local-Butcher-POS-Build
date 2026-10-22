@@ -186,8 +186,10 @@ begin
   return v_out;
 end $$;
 
--- Every sale line in a range, for the CSV export.
-create or replace function office_sales_lines(p_from date, p_to date) returns table (
+-- Every sale line in a range, for the CSV export. (Migration 10 replaces it with
+-- discount names; dropping first lets either file be re-run.)
+drop function if exists office_sales_lines(date, date);
+create function office_sales_lines(p_from date, p_to date) returns table (
   business_date date, created_at timestamptz, receipt_no text, cashier text, payment_method text, member_no text,
   product text, category text, unit text, qty bigint, unit_price bigint, gross bigint, discount bigint, net bigint,
   cost bigint

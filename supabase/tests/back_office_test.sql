@@ -1,4 +1,5 @@
--- Behavioural tests for the Phase 5 Back Office report and expenses (migration 9).
+-- Behavioural tests for the Phase 5 Back Office report and expenses (migration 9,
+-- opened with a Back Office session since migration 10).
 \set ON_ERROR_STOP on
 
 insert into auth.users values
@@ -34,42 +35,52 @@ do $$ begin
   perform sync_sale(current_setting('test.sale2')::jsonb);
 end $$;
 
--- Cashiers cannot see the reports or record expenses.
+-- The owner's employee ID with an open Back Office session (badge + code are tested in staff_test).
+reset role;
+insert into employees (id, store_id, employee_no, name, role, badge_hash)
+select '50000000-0000-0000-0000-000000000001', store_id, 'E-0001', 'Josh', 'owner',
+  encode(extensions.digest('badge-josh', 'sha256'), 'hex') from staff_profiles where display_name = 'Josh';
+insert into office_sessions (token_hash, store_id, employee_id, expires_at)
+select encode(extensions.digest('tok-josh', 'sha256'), 'hex'), store_id, id, now() + interval '1 hour'
+from employees where employee_no = 'E-0001';
+set role authenticated;
+
+-- Without an open Back Office session nobody sees the reports or records expenses.
 do $$ begin
-  perform office_report('2026-10-01', '2026-10-31');
+  perform office_report('2026-10-01', '2026-10-31', 'wrong-token');
   raise exception 'FAIL: cashier read the report';
 exception when insufficient_privilege then raise notice 'ok: reports are for managers and owners';
 end $$;
 do $$ begin
-  perform record_expense('{"category":"rent","amount":100000,"spentOn":"2026-10-22"}');
+  perform record_expense('{"category":"rent","amount":100000,"spentOn":"2026-10-22"}', null);
   raise exception 'FAIL: cashier recorded an expense';
 exception when insufficient_privilege then raise notice 'ok: expenses are for managers and owners';
 end $$;
 
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a1';
 do $$ declare id uuid; begin
-  id := record_expense('{"id":"60000000-0000-0000-0000-000000000001","category":"wages","amount":50000,"spentOn":"2026-10-22","note":"Helper"}');
-  id := record_expense('{"id":"60000000-0000-0000-0000-000000000001","category":"wages","amount":60000,"spentOn":"2026-10-22","note":"Helper"}');
+  id := record_expense('{"id":"60000000-0000-0000-0000-000000000001","category":"wages","amount":50000,"spentOn":"2026-10-22","note":"Helper"}', 'tok-josh');
+  id := record_expense('{"id":"60000000-0000-0000-0000-000000000001","category":"wages","amount":60000,"spentOn":"2026-10-22","note":"Helper"}', 'tok-josh');
   if (select count(*) || ' ' || sum(amount) from expenses) <> '1 60000' then
     raise exception 'FAIL: expense retry/update';
   end if;
-  perform record_expense('{"category":"utilities","amount":2000,"spentOn":"2026-10-23"}');
+  perform record_expense('{"category":"utilities","amount":2000,"spentOn":"2026-10-23"}', 'tok-josh');
   if (select count(*) from audit_logs where action = 'expense_saved') <> 3 then raise exception 'FAIL: expense audit'; end if;
   raise notice 'ok: expenses saved, updated by id and audited';
 end $$;
 do $$ begin
-  perform record_expense('{"category":"rent","amount":0,"spentOn":"2026-10-22"}');
+  perform record_expense('{"category":"rent","amount":0,"spentOn":"2026-10-22"}', 'tok-josh');
   raise exception 'FAIL: zero expense accepted';
 exception when invalid_parameter_value then raise notice 'ok: expense amount checked';
 end $$;
 do $$ begin
-  perform record_expense('{"category":"snacks","amount":100,"spentOn":"2026-10-22"}');
+  perform record_expense('{"category":"snacks","amount":100,"spentOn":"2026-10-22"}', 'tok-josh');
   raise exception 'FAIL: unknown category accepted';
 exception when invalid_parameter_value then raise notice 'ok: expense category checked';
 end $$;
 
 do $$ declare r jsonb; t jsonb; begin
-  r := office_report('2026-10-22', '2026-10-23');
+  r := office_report('2026-10-22', '2026-10-23', 'tok-josh');
   t := r -> 'totals';
   if (t ->> 'revenue')::bigint <> 60400 or (t ->> 'transactions')::int <> 2 or (t ->> 'cogs')::bigint <> 50250
      or (t ->> 'grossProfit')::bigint <> 10150 or (t ->> 'discounts')::bigint <> 3600
@@ -106,18 +117,18 @@ do $$ declare r jsonb; t jsonb; begin
   if jsonb_array_length(r -> 'recent') <> 2 then raise exception 'FAIL: recent'; end if;
   raise notice 'ok: report totals, trends, categories, hours, discounts, members, stock';
 
-  r := office_report(null, '2026-10-23');
+  r := office_report(null, '2026-10-23', 'tok-josh');
   if r ->> 'from' <> '2026-10-22' then raise exception 'FAIL: all history starts at the first sale'; end if;
-  r := office_report('2026-10-23', '2026-10-23');
+  r := office_report('2026-10-23', '2026-10-23', 'tok-josh');
   if (r -> 'totals' ->> 'revenue')::bigint <> 28000 then raise exception 'FAIL: range filter'; end if;
   raise notice 'ok: date range and all history';
 
-  if (select count(*) from office_sales_lines('2026-10-01', '2026-10-31')) <> 3 then raise exception 'FAIL: csv lines'; end if;
-  if (select sum(cost) from office_sales_lines('2026-10-01', '2026-10-31')) <> 50250 then raise exception 'FAIL: csv cost'; end if;
+  if (select count(*) from office_sales_lines('2026-10-01', '2026-10-31', 'tok-josh')) <> 3 then raise exception 'FAIL: csv lines'; end if;
+  if (select sum(cost) from office_sales_lines('2026-10-01', '2026-10-31', 'tok-josh')) <> 50250 then raise exception 'FAIL: csv cost'; end if;
   raise notice 'ok: sale lines for CSV';
 
-  if not delete_expense('60000000-0000-0000-0000-000000000001') then raise exception 'FAIL: delete'; end if;
-  if delete_expense('60000000-0000-0000-0000-000000000001') then raise exception 'FAIL: delete twice'; end if;
+  if not delete_expense('60000000-0000-0000-0000-000000000001', 'tok-josh') then raise exception 'FAIL: delete'; end if;
+  if delete_expense('60000000-0000-0000-0000-000000000001', 'tok-josh') then raise exception 'FAIL: delete twice'; end if;
   raise notice 'ok: expenses can be deleted';
 end $$;
 
@@ -126,14 +137,25 @@ reset role;
 with st as (insert into stores (name) values ('Other Shop') returning id)
 insert into staff_profiles (user_id, store_id, display_name, role)
 select '00000000-0000-0000-0000-0000000000d1', id, 'Zed', 'owner' from st;
+insert into employees (id, store_id, employee_no, name, role, badge_hash)
+select '50000000-0000-0000-0000-0000000000d1', store_id, 'E-0001', 'Zed', 'owner',
+  encode(extensions.digest('badge-zed', 'sha256'), 'hex') from staff_profiles where display_name = 'Zed';
+insert into office_sessions (token_hash, store_id, employee_id, expires_at)
+select encode(extensions.digest('tok-zed', 'sha256'), 'hex'), store_id, id, now() + interval '1 hour'
+from employees where name = 'Zed';
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000d1';
+do $$ begin
+  perform office_report('2026-10-01', '2026-10-31', 'tok-josh');
+  raise exception 'FAIL: another store used this shop''s session';
+exception when insufficient_privilege then raise notice 'ok: a session only works for its own store';
+end $$;
 do $$ declare r jsonb; begin
-  r := office_report('2026-10-01', '2026-10-31');
+  r := office_report('2026-10-01', '2026-10-31', 'tok-zed');
   if (r -> 'totals' ->> 'revenue')::bigint <> 0 or (r -> 'members' ->> 'total')::int <> 0 then
     raise exception 'FAIL: other store sees data';
   end if;
-  if delete_expense((select id from expenses limit 1)) then raise exception 'FAIL: other store deleted expense'; end if;
+  if delete_expense('60000000-0000-0000-0000-000000000001', 'tok-zed') then raise exception 'FAIL: other store deleted expense'; end if;
   raise notice 'ok: reports and expenses stay within the store';
 end $$;
 

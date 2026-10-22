@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { Button, ErrorText, Field, inputClass } from "@/components/ui";
 import { CloudRejection, getSupabase, supabaseApi, type CloudApi } from "@/lib/cloud/api";
 import { signIn } from "@/lib/cloud/session";
@@ -32,6 +31,7 @@ import {
   type SaleLineRow,
 } from "@/domain/office";
 import { ColumnChart, Legend, RankedBars, SERIES, ShareBar, TrendChart } from "./charts";
+import { SetupWizard, StaffPage, UnlockScreen, withSession, type OfficeSession } from "./staff";
 
 const OTHER_PART = "#a7afb8";
 
@@ -39,8 +39,31 @@ type Gate =
   | { kind: "loading" }
   | { kind: "no_cloud" }
   | { kind: "signed_out" }
-  | { kind: "not_allowed"; name: string }
-  | { kind: "ready"; sb: SupabaseClient; api: CloudApi; name: string; role: string; store: string };
+  | { kind: "needs_update" }
+  | { kind: "setup_wait"; store: string }
+  | { kind: "setup"; api: CloudApi; name: string; store: string }
+  | { kind: "locked"; api: CloudApi; store: string }
+  | { kind: "open"; api: CloudApi; base: CloudApi; store: string; session: OfficeSession };
+
+const SESSION_KEY = "tlb-office-session";
+
+function savedSession(): OfficeSession | undefined {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? "null") as OfficeSession | null;
+    return s && Date.parse(s.expiresAt) > Date.now() ? s : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveSession(s: OfficeSession | undefined) {
+  try {
+    if (s) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Private mode: the session lasts only while the page is open.
+  }
+}
 
 function message(e: unknown): string {
   if (e instanceof CloudRejection) return e.message;
@@ -57,6 +80,16 @@ function download(name: string, csv: string) {
 
 export function OfficeApp() {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
+  const [tab, setTab] = useState<"reports" | "staff">("reports");
+
+  const openWith = useCallback((base: CloudApi, store: string, session: OfficeSession) => {
+    saveSession(session);
+    const lockNow = () => {
+      saveSession(undefined);
+      setGate({ kind: "locked", api: base, store });
+    };
+    setGate({ kind: "open", api: withSession(base, session.token, lockNow), base, store, session });
+  }, []);
 
   const check = useCallback(async () => {
     const sb = getSupabase();
@@ -70,20 +103,47 @@ export function OfficeApp() {
         {},
       );
       const me = rows[0];
-      if (!me?.role || (me.role !== "owner" && me.role !== "manager"))
-        return setGate({ kind: "not_allowed", name: me?.display_name ?? data.session.user.email ?? "" });
-      setGate({ kind: "ready", sb, api, name: me.display_name ?? "", role: me.role, store: me.store_name ?? "" });
+      if (!me?.role) return setGate({ kind: "signed_out" });
+      const store = me.store_name ?? "";
+      let status: { setupOpen: boolean; accountRole: string };
+      try {
+        status = await api.rpc("office_status", {});
+      } catch (e) {
+        if (e instanceof CloudRejection && e.code === "PGRST202") return setGate({ kind: "needs_update" });
+        throw e;
+      }
+      if (status.setupOpen) {
+        return setGate(
+          status.accountRole === "owner"
+            ? { kind: "setup", api, name: me.display_name ?? "", store }
+            : { kind: "setup_wait", store },
+        );
+      }
+      const saved = savedSession();
+      if (saved) openWith(api, store, saved);
+      else setGate({ kind: "locked", api, store });
     } catch (e) {
       setGate({ kind: "signed_out" });
       console.warn(message(e));
     }
-  }, []);
+  }, [openWith]);
 
   useEffect(() => {
     // Reads the saved session from browser storage once on load.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void check();
   }, [check]);
+
+  async function lock() {
+    if (gate.kind !== "open") return;
+    try {
+      await gate.base.rpc("office_lock", { p_token: gate.session.token });
+    } catch {
+      // The session expires on its own.
+    }
+    saveSession(undefined);
+    setGate({ kind: "locked", api: gate.base, store: gate.store });
+  }
 
   return (
     <div className="min-h-dvh">
@@ -93,9 +153,9 @@ export function OfficeApp() {
           <img src="/brand/logo.jpg" alt="" className="size-10 rounded-full bg-cream-50 object-cover" />
           <div>
             <h1 className="text-lg font-bold leading-tight">Back Office</h1>
-            {gate.kind === "ready" && (
-              <p className="text-xs text-cream-200">
-                {gate.store} · {gate.name} ({gate.role})
+            {gate.kind === "open" && (
+              <p className="text-xs text-cream-200" data-testid="office-who">
+                {gate.store} · {gate.session.name} ({gate.session.role}, {gate.session.employeeNo})
               </p>
             )}
           </div>
@@ -103,21 +163,55 @@ export function OfficeApp() {
             <Link href="/pos" className="rounded-lg px-3 py-2 text-sm font-semibold text-cream-50 hover:bg-navy-700">
               Open POS
             </Link>
-            {gate.kind === "ready" || gate.kind === "not_allowed" ? (
+            {gate.kind === "open" && (
+              <Button
+                size="sm"
+                className="bg-amber-300 text-charcoal-900 hover:bg-amber-200"
+                onClick={lock}
+                data-testid="office-lock"
+              >
+                Lock
+              </Button>
+            )}
+            {gate.kind !== "loading" && gate.kind !== "no_cloud" && gate.kind !== "signed_out" && (
               <Button
                 size="sm"
                 variant="ghost"
                 className="text-cream-50 hover:bg-navy-700"
                 onClick={async () => {
+                  await lock();
                   await getSupabase()?.auth.signOut();
                   setGate({ kind: "signed_out" });
                 }}
               >
-                Sign out
+                Sign out of the cloud
               </Button>
-            ) : null}
+            )}
           </div>
         </div>
+        {gate.kind === "open" && (
+          <nav className="mx-auto flex max-w-6xl gap-1 px-2" aria-label="Back Office sections">
+            {(
+              [
+                ["reports", "Reports"],
+                ["staff", "Staff"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                aria-current={tab === id ? "page" : undefined}
+                data-testid={`office-tab-${id}`}
+                className={`rounded-t-lg px-4 py-2 text-sm font-semibold ${
+                  tab === id ? "bg-burgundy-700 text-cream-50" : "text-cream-100 hover:bg-navy-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
       </header>
       <main className="mx-auto grid max-w-6xl gap-4 p-4">
         {gate.kind === "loading" && <p className="text-charcoal-500">Loading…</p>}
@@ -128,13 +222,32 @@ export function OfficeApp() {
           </Notice>
         )}
         {gate.kind === "signed_out" && <SignIn onDone={check} />}
-        {gate.kind === "not_allowed" && (
+        {gate.kind === "needs_update" && (
           <Notice>
-            {gate.name ? `${gate.name}, the` : "The"} Back Office is for owner and manager accounts. Ask the owner if
-            you need access.
+            The cloud database needs an update before the Back Office can open: run the newest file in
+            supabase/migrations in the Supabase SQL Editor, then reload this page.
           </Notice>
         )}
-        {gate.kind === "ready" && <Dashboard api={gate.api} />}
+        {gate.kind === "setup_wait" && (
+          <Notice>
+            The owner has not set up their owner ID yet. The owner signs in here once with their account to do it.
+          </Notice>
+        )}
+        {gate.kind === "setup" && (
+          <SetupWizard
+            api={gate.api}
+            ownerName={gate.name}
+            storeName={gate.store}
+            onUnlocked={(sess) => openWith(gate.api, gate.store, sess)}
+          />
+        )}
+        {gate.kind === "locked" && (
+          <UnlockScreen api={gate.api} onUnlocked={(sess) => openWith(gate.api, gate.store, sess)} />
+        )}
+        {gate.kind === "open" && tab === "reports" && <Dashboard key={gate.session.token} api={gate.api} />}
+        {gate.kind === "open" && tab === "staff" && (
+          <StaffPage api={gate.api} storeName={gate.store} session={gate.session} />
+        )}
       </main>
     </div>
   );
@@ -167,7 +280,10 @@ function SignIn({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={submit} className="mx-auto grid w-full max-w-sm gap-3 rounded-2xl bg-white p-5 shadow-sm">
       <h2 className="text-lg font-bold text-burgundy-800">Sign in</h2>
-      <p className="text-sm text-charcoal-700">Use the owner or manager account you use for cloud sync on the POS.</p>
+      <p className="text-sm text-charcoal-700">
+        Sign this device in to the shop&apos;s cloud account once (the same one the POS uses). After that the Back
+        Office opens with an owner or manager badge and a code from Google Authenticator.
+      </p>
       <Field label="Email">
         <input
           className={inputClass}
