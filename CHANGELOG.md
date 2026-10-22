@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.0 — 2026-10-22 — Phase 4: members and discount programs
+
+### Added
+- POS → Members with Members, Discount programs and Insights tabs.
+- Member registration: name, age (stored as birth year), gender, optional mobile number (normalised to
+  +639…), required privacy consent and optional consent to promo texts. The member number
+  (`M-<device>-<seq>`) and QR code are made on save; the card is drawn at ID-card size and can be printed
+  or saved as a PNG.
+- Camera QR scanner built into the app (the browser's barcode reader where available, jsQR otherwise),
+  plus USB scanner or typed lookup by number, name or mobile.
+- Members attached to sales (receipt shows the member number); purchase history per member.
+- Discount programs: percent or pesos, whole sale or selected products/categories (percent), members
+  only, minimum purchase, start/end dates, on/off. Cashiers pick one from a list at checkout; program
+  discounts do not need the manager PIN. Receipts print the program name.
+- Insights (manager PIN): members by gender and age band, member share of sales and revenue, top
+  members, and a CSV of members who agreed to promo texts for an SMS provider.
+- Supabase migration 6: member and program columns and checks, `sync_customer`, `sync_promotion`,
+  `members_feed`, `sync_sale` with member and program, `inventory_feed` with the member per sale line.
+- Local database schema version 3 (members, programs, sales by member).
+- Tests: 13 unit tests, 7 database and sync tests, 18 PostgreSQL checks, 2 browser tests (one scans a QR
+  code through Chromium's fake camera).
+
+### Changed
+- Typed discounts still need the manager PIN above the cashier limit; program discounts do not count
+  toward that limit.
+
 ## 0.3.0 — 2026-10-23 — Phase 3: inventory management
 
 ### Added

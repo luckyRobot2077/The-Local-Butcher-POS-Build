@@ -27,6 +27,10 @@ export interface SyncMeta {
   feedCursor?: string;
   /** Why the inventory feed could not be downloaded; sales and stock still sync. */
   feedError?: string;
+  /** Server time of the last members and programs download. */
+  membersCursor?: string;
+  /** Why members and programs could not be downloaded; sales still sync. */
+  membersFeedError?: string;
 }
 
 export async function getCloudIdentity(db = getDb()): Promise<CloudIdentity | undefined> {

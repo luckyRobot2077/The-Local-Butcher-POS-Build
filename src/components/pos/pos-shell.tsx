@@ -9,6 +9,7 @@ import { SyncStatus } from "./status-bar";
 const TABS = [
   { href: "/pos", label: "Sell" },
   { href: "/pos/products", label: "Products" },
+  { href: "/pos/members", label: "Members" },
   { href: "/pos/inventory", label: "Inventory" },
   { href: "/pos/history", label: "History" },
   { href: "/pos/device", label: "Device" },

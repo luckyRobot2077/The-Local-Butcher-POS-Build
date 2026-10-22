@@ -63,7 +63,10 @@ export interface SaleRecord {
   change: Centavos;
   orderDiscountDetail?: AppliedDiscountInput;
   discountApprovedBy?: string;
+  /** Member attached to the sale (customers.id in the cloud). */
   customerId?: string;
+  /** Member number snapshot, printed on the receipt. */
+  memberNo?: string;
   itemCount: number;
   syncStatus: SyncStatus;
   receiptPrintCount: number;
@@ -81,6 +84,7 @@ export interface BuildSaleArgs {
   payment: PaymentInput;
   orderDiscountDetail?: AppliedDiscountInput;
   discountApprovedBy?: string;
+  member?: { id: string; memberNo: string };
   saleId: string;
   receiptNo: string;
   storeId: string;
@@ -149,6 +153,7 @@ export function buildSale(a: BuildSaleArgs): { sale: SaleRecord; items: SaleItem
     change,
     orderDiscountDetail: a.orderDiscountDetail,
     discountApprovedBy: a.discountApprovedBy,
+    ...(a.member ? { customerId: a.member.id, memberNo: a.member.memberNo } : {}),
     itemCount: items.length,
     syncStatus: "pending",
     receiptPrintCount: 0,

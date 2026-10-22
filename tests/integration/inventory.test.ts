@@ -1,6 +1,6 @@
 import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
-import { PosDatabase } from "@/lib/db/db";
+import { LOCAL_SCHEMA_VERSION, PosDatabase } from "@/lib/db/db";
 import { ensureDevice } from "@/lib/db/config";
 import { ensureDefaultCategories, loadSampleCatalog } from "@/lib/db/seed";
 import { ProductError, recordStockMovement } from "@/lib/db/products";
@@ -236,7 +236,7 @@ describe("receiving purchases", () => {
     const db = new PosDatabase(name);
     dbs.push(db);
     await db.open();
-    expect(db.verno).toBe(2);
+    expect(db.verno).toBe(LOCAL_SCHEMA_VERSION);
     expect(await db.inventoryMovements.get("m1")).toMatchObject({ qtyDelta: 5 });
     expect(await db.suppliers.count()).toBe(0);
   });

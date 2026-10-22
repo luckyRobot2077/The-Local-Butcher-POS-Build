@@ -78,6 +78,23 @@ Not yet: carcass-to-cut conversion (the batch table keeps `parent_batch_id` for 
 times, supplier returns, editing a purchase after the fact (use a correction), sales velocity targets
 for small categories (they show "too few to compare" instead). Inventory rules are saved per device.
 
+## Phase 4 — Members and discount programs ✅ (built and tested locally; migration 6 to be run on the real project)
+
+| Item | Status |
+|---|---|
+| Member registration: name, age (stored as birth year), gender, optional mobile, privacy consent | ✅ |
+| Member number and QR code made on save; ID-card-size card to print or save as an image | ✅ |
+| Camera QR scanner in the app (built-in barcode reader or jsQR), USB scanner and typed lookup | ✅ |
+| Member attached to the sale; purchase history per member (this device, plus others on manager devices) | ✅ |
+| Discount programs set up by owner/manager; cashier picks from a list, no PIN needed | ✅ |
+| Program rules: percent or pesos, whole sale or selected products/categories, members only, minimum, dates | ✅ |
+| Demographics and spending insights; opted-in contacts CSV for an SMS provider | ✅ |
+| Members and programs available offline and synced to every device | ✅ |
+
+Not yet: sending SMS from the app (needs an SMS provider account such as Semaphore), limits per member
+(e.g. once a day), programs that need a central usage count, merging duplicate members, deleting a
+member's data on request (switch the membership off for now and ask for removal in Supabase).
+
 ## Known gaps in Phase 1
 
 - Without a cloud sign-in, staff identity is a typed cashier name plus the device manager PIN.
@@ -91,8 +108,7 @@ for small categories (they show "too few to compare" instead). Inventory rules a
 
 | Phase | Scope | Needs from owner |
 |---|---|---|
-| 4 Members & promotions (next) | Member registration (no tiers), purchase history, promotions and rules, offline cache | — |
-| 5 Back Office & staff | Dashboards (Recharts), reports, expenses, permissions UI, shifts, audit, CSV | — |
+| 5 Back Office & staff (next) | Dashboards (Recharts), reports, expenses, permissions UI, shifts, audit, CSV | — |
 | 6 Printer | PT-210 test, BLE/Classic adapter or native bridge | The printer |
 | 7 Backup & recovery | Cloud export, scheduled backups, restore wizard with staging | Off-site storage |
 | 8 Hardening | Real-device, power/network tests, security review, BIR review | BIR details |

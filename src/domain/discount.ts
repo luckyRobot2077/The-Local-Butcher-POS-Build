@@ -72,3 +72,12 @@ export function describeDiscount(d: DiscountInput): string {
   }
   return "fixed";
 }
+
+/** Parse a typed percentage, "12.5" -> 1250 basis points. Null if not 0–100 with up to 2 decimals. */
+export function parsePercent(s: string): number | null {
+  const t = s.trim();
+  if (!/^\d+(\.\d{0,2})?$/.test(t)) return null;
+  const [w, f = ""] = t.split(".");
+  const bp = Number(w) * 100 + Number(f.padEnd(2, "0"));
+  return bp <= 10_000 ? bp : null;
+}

@@ -19,6 +19,11 @@ const KIND_LABEL: Record<string, string> = {
   product: "Product",
   product_image: "Photo",
   inventory_movement: "Stock change",
+  supplier: "Supplier",
+  purchase: "Delivery",
+  purchase_payment: "Delivery payment",
+  customer: "Member",
+  promotion: "Discount program",
 };
 
 export function CloudSection() {
@@ -339,6 +344,8 @@ function SyncPanel({ onSync, busy }: { onSync: () => void; busy: boolean }) {
     const m = new Map<string, string>();
     for (const p of await getDb().products.bulkGet(ids)) if (p) m.set(p.id, p.name);
     for (const s of await getDb().sales.bulkGet(ids)) if (s) m.set(s.id, `Receipt ${s.receiptNo}`);
+    for (const c of await getDb().members.bulkGet(ids)) if (c) m.set(c.id, `${c.name} (${c.memberNo})`);
+    for (const p of await getDb().programs.bulkGet(ids)) if (p) m.set(p.id, p.name);
     return m;
   }, [failed.map((f) => f.id).join()]);
   // Show one row per product conflict even if several edits are queued.
@@ -358,6 +365,9 @@ function SyncPanel({ onSync, busy }: { onSync: () => void; busy: boolean }) {
           </div>
           {meta?.lastError && <div className="text-amber-800">Last attempt: {meta.lastError}</div>}
           {meta?.feedError && <div className="text-amber-800">Inventory reports: {meta.feedError}</div>}
+          {meta?.membersFeedError && (
+            <div className="text-amber-800">Members and programs: {meta.membersFeedError}</div>
+          )}
         </div>
         <Button onClick={onSync} disabled={busy} data-testid="sync-now">
           {busy ? "Syncing…" : "Sync now"}

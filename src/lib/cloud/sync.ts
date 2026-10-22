@@ -1,9 +1,13 @@
 import type { PaymentRecord, SaleItemRecord, SaleRecord } from "@/domain/checkout";
+import type { AppliedDiscountInput } from "@/domain/cart";
+import type { DiscountProgram } from "@/domain/programs";
+import type { Gender } from "@/domain/members";
 import { getDb, type PosDatabase } from "@/lib/db/db";
 import { nowIso } from "@/lib/db/ids";
 import type {
   InventoryBatch,
   InventoryMovement,
+  Member,
   MovementType,
   OutboxEntry,
   PaymentStatus,
@@ -20,7 +24,8 @@ import { getCloudIdentity, getSyncMeta, patchSyncMeta } from "./identity";
  *
  * Order matters because of foreign keys on the server:
  *   categories → products → photos → suppliers → purchases → payment
- *   status → stock movements → sales → pull → inventory feed.
+ *   status → stock movements → members → discount programs → sales →
+ *   pull → members feed → inventory feed.
  *
  * Outcomes per outbox entry:
  *   - accepted or already there (idempotent) → status "sent"
@@ -38,6 +43,8 @@ export interface SyncReport {
   sales: number;
   suppliers: number;
   purchases: number;
+  members: number;
+  programs: number;
   failed: number;
   conflicts: number;
   pulledProducts: number;
@@ -100,6 +107,8 @@ async function doSync(api: CloudApi, db: PosDatabase): Promise<SyncReport> {
     sales: 0,
     suppliers: 0,
     purchases: 0,
+    members: 0,
+    programs: 0,
     failed: 0,
     conflicts: 0,
     pulledProducts: 0,
@@ -114,8 +123,18 @@ async function doSync(api: CloudApi, db: PosDatabase): Promise<SyncReport> {
     await pushPurchases(api, db, device.deviceId, report);
     await pushPurchasePayments(api, db, report);
     await pushMovements(api, db, device.deviceId, report);
+    await pushMembers(api, db, report);
+    await pushPrograms(api, db, report);
     await pushSales(api, db, report);
     await pull(api, db, report);
+    // Members and programs: a rejection (e.g. the database update not run yet) must not hold up sales.
+    try {
+      await pullMembersFeed(api, db, report);
+      await patchSyncMeta({ membersFeedError: undefined }, db);
+    } catch (e) {
+      if (!(e instanceof CloudRejection)) throw e;
+      await patchSyncMeta({ membersFeedError: e.message }, db);
+    }
     if (identity.role !== "cashier") {
       // Reports only: a rejection here (e.g. the database update not run yet) must not hold up sales.
       try {
@@ -447,6 +466,83 @@ async function pushMovements(api: CloudApi, db: PosDatabase, deviceId: string, r
   }
 }
 
+export function memberPayload(m: Member) {
+  return {
+    id: m.id,
+    memberNo: m.memberNo,
+    name: m.name,
+    birthYear: m.birthYear,
+    gender: m.gender,
+    contactNumber: m.contactNumber ?? "",
+    privacyConsentAt: m.privacyConsentAt,
+    marketingConsent: m.marketingConsent,
+    marketingConsentAt: m.marketingConsentAt ?? "",
+    active: m.active,
+    notes: m.notes ?? "",
+    registeredAt: m.registeredAt,
+    registeredBy: m.registeredBy,
+    deviceId: m.deviceId ?? "",
+  };
+}
+
+async function pushMembers(api: CloudApi, db: PosDatabase, report: SyncReport) {
+  const groups = groupBy(await pendingEntries(db, "customer"), (e) => e.entityId);
+  for (const [memberId, entries] of groups) {
+    const m = await db.members.get(memberId);
+    if (!m) {
+      await mark(db, entries, "sent", "Member no longer on this device");
+      continue;
+    }
+    const ok = await attempt(db, entries, report, async () => {
+      await api.rpc<string>("sync_customer", { p: memberPayload(m) });
+    });
+    if (!ok) continue;
+    await mark(db, entries, "sent");
+    report.members++;
+  }
+}
+
+export function programPayload(p: DiscountProgram) {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    kind: p.input.kind,
+    value: p.input.kind === "percent" ? p.input.basisPoints : p.input.amount,
+    scope: p.scope,
+    productIds: p.productIds,
+    categoryIds: p.categoryIds,
+    membersOnly: p.membersOnly,
+    minPurchase: p.minPurchase,
+    startsOn: p.startsOn ?? "",
+    endsOn: p.endsOn ?? "",
+    active: p.active,
+    updatedBy: p.updatedBy,
+  };
+}
+
+async function pushPrograms(api: CloudApi, db: PosDatabase, report: SyncReport) {
+  const groups = groupBy(await pendingEntries(db, "promotion"), (e) => e.entityId);
+  for (const [programId, entries] of groups) {
+    const p = await db.programs.get(programId);
+    if (!p) {
+      await mark(db, entries, "sent", "Program no longer on this device");
+      continue;
+    }
+    const ok = await attempt(db, entries, report, async () => {
+      await api.rpc<string>("sync_promotion", { p: programPayload(p) });
+    });
+    if (!ok) continue;
+    await mark(db, entries, "sent");
+    report.programs++;
+  }
+}
+
+/** Program discounts name their program; typed ones send nothing extra, so older payloads hash the same. */
+function discountSource(d: AppliedDiscountInput) {
+  return d.source === "promotion" ? { source: "promotion", promotionId: d.promotionId ?? null } : {};
+}
+
 /**
  * The exact payload for sync_sale. Only immutable fields are included so a
  * retry sends byte-identical content (the server compares a hash).
@@ -461,6 +557,7 @@ export function salePayload(sale: SaleRecord, items: SaleItemRecord[], payment: 
         value: i.discount!.input.kind === "percent" ? i.discount!.input.basisPoints : i.discount!.input.amount,
         amount: i.itemDiscount,
         reason: i.discount!.reason ?? null,
+        ...discountSource(i.discount!),
       })),
     ...(sale.orderDiscountDetail && sale.orderDiscount > 0
       ? [
@@ -473,6 +570,7 @@ export function salePayload(sale: SaleRecord, items: SaleItemRecord[], payment: 
                 : sale.orderDiscountDetail.input.amount,
             amount: sale.orderDiscount,
             reason: sale.orderDiscountDetail.reason ?? null,
+            ...discountSource(sale.orderDiscountDetail),
           },
         ]
       : []),
@@ -495,6 +593,8 @@ export function salePayload(sale: SaleRecord, items: SaleItemRecord[], payment: 
       tendered: sale.tendered,
       change: sale.change,
       discountApprovedBy: sale.discountApprovedBy ?? null,
+      // Only present on member sales, so sales made before Phase 4 keep the same payload.
+      ...(sale.customerId ? { customerId: sale.customerId } : {}),
     },
     items: items
       .slice()
@@ -736,7 +836,16 @@ interface InventoryFeed {
     by_name: string | null;
     at: string;
   }[];
-  sale_lines: { id: string; sale_id: string; product_id: string; qty: number; net: number; cost: number; at: string }[];
+  sale_lines: {
+    id: string;
+    sale_id: string;
+    product_id: string;
+    qty: number;
+    net: number;
+    cost: number;
+    at: string;
+    customer_id?: string | null;
+  }[];
 }
 
 /** Overlap between feed downloads, so rows committed late are not missed (ids make it idempotent). */
@@ -859,11 +968,114 @@ async function pullInventoryFeed(api: CloudApi, db: PosDatabase, deviceId: strin
         net: Number(l.net),
         cost: Number(l.cost),
         at: l.at,
+        customerId: l.customer_id ?? undefined,
       });
     }
     report.pulledRecords += n;
   });
   await patchSyncMeta({ feedCursor: feed.now }, db);
+}
+
+/* ------------------------------------------------------------------ members feed */
+
+interface MembersFeed {
+  now: string;
+  customers: {
+    id: string;
+    member_no: string;
+    name: string;
+    birth_year: number;
+    gender: Gender;
+    contact_number: string | null;
+    privacy_consent_at: string;
+    marketing_consent: boolean;
+    marketing_consent_at: string | null;
+    active: boolean;
+    notes: string | null;
+    registered_at: string;
+    registered_by: string | null;
+    device_id: string | null;
+    updated_at: string;
+  }[];
+  promotions: {
+    id: string;
+    name: string;
+    description: string | null;
+    kind: "percent" | "fixed";
+    value: number;
+    scope: "order" | "items";
+    product_ids: string[];
+    category_ids: string[];
+    members_only: boolean;
+    min_purchase: number;
+    starts_on: string | null;
+    ends_on: string | null;
+    active: boolean;
+    updated_by: string | null;
+    updated_at: string;
+  }[];
+}
+
+/** Downloads members and discount programs saved on other devices (every staff role). */
+async function pullMembersFeed(api: CloudApi, db: PosDatabase, report: SyncReport) {
+  const { membersCursor } = await getSyncMeta(db);
+  const since = membersCursor ? new Date(Date.parse(membersCursor) - FEED_OVERLAP_MS).toISOString() : null;
+  const feed = await api.rpc<MembersFeed>("members_feed", { p_since: since });
+  const dirty = new Set(
+    (await db.outbox.where("kind").anyOf("customer", "promotion").toArray())
+      .filter((e) => e.status !== "sent")
+      .map((e) => e.entityId),
+  );
+  await db.transaction("rw", [db.members, db.programs], async () => {
+    for (const c of feed.customers) {
+      if (dirty.has(c.id)) continue; // this device's edit wins until it is sent
+      const local = await db.members.get(c.id);
+      await db.members.put({
+        id: c.id,
+        memberNo: c.member_no,
+        name: c.name,
+        birthYear: Number(c.birth_year),
+        gender: c.gender,
+        contactNumber: c.contact_number ?? undefined,
+        privacyConsentAt: c.privacy_consent_at,
+        marketingConsent: c.marketing_consent,
+        marketingConsentAt: c.marketing_consent_at ?? undefined,
+        active: c.active,
+        notes: c.notes ?? undefined,
+        registeredAt: c.registered_at,
+        registeredBy: c.registered_by ?? "",
+        deviceId: c.device_id ?? undefined,
+        updatedAt: c.updated_at,
+        remote: local ? local.remote : true,
+      });
+      report.pulledRecords++;
+    }
+    for (const p of feed.promotions) {
+      if (dirty.has(p.id)) continue;
+      await db.programs.put({
+        id: p.id,
+        name: p.name,
+        description: p.description ?? "",
+        input:
+          p.kind === "percent"
+            ? { kind: "percent", basisPoints: Number(p.value) }
+            : { kind: "fixed", amount: Number(p.value) },
+        scope: p.scope,
+        productIds: p.product_ids ?? [],
+        categoryIds: p.category_ids ?? [],
+        membersOnly: p.members_only,
+        minPurchase: Number(p.min_purchase),
+        startsOn: p.starts_on ?? undefined,
+        endsOn: p.ends_on ?? undefined,
+        active: p.active,
+        updatedAt: p.updated_at,
+        updatedBy: p.updated_by ?? "",
+        remote: true,
+      });
+      report.pulledRecords++;
+    }
+  });
+  await patchSyncMeta({ membersCursor: feed.now }, db);
 }
 
 /* ------------------------------------------------------------------ manual resolution */

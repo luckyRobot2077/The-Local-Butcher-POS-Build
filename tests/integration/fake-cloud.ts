@@ -34,6 +34,8 @@ export class FakeCloud {
   sales = new Map<string, string>(); // id -> canonical payload
   saleRows: (Row & { receivedAt: string })[] = [];
   suppliers = new Map<string, Row & { id: string; name: string; updated_at: string }>();
+  customers = new Map<string, Row & { id: string; updated_at: string }>();
+  promotions = new Map<string, Row & { id: string; updated_at: string }>();
   purchases = new Map<
     string,
     { canonical: string; payload: Row; paymentStatus: string; at: string; updatedAt: string }
@@ -214,8 +216,19 @@ export class FakeCloud {
                 ? Math.floor((Number(it.unitCost) * Number(it.qty) + 500) / 1000)
                 : Number(it.unitCost) * Number(it.qty),
             at: (s.sale as Row).createdAt,
+            customer_id: (s.sale as Row).customerId ?? null,
           })),
         ),
+    };
+  }
+
+  /** Mirrors members_feed(). */
+  private membersFeed(since: string | null) {
+    const after = (t: string) => !since || t > since;
+    return {
+      now: new Date().toISOString(),
+      customers: [...this.customers.values()].filter((c) => after(c.updated_at)),
+      promotions: [...this.promotions.values()].filter((p) => after(p.updated_at)),
     };
   }
 
@@ -351,6 +364,58 @@ export class FakeCloud {
         p.updatedAt = new Date().toISOString();
         return a.p_status;
       }
+      case "sync_customer": {
+        const p = a.p as Row;
+        const id = String(p.id);
+        const cur = this.customers.get(id);
+        if (cur && cur.member_no !== p.memberNo) throw new CloudRejection("member numbers cannot change", "22023");
+        if (!cur && [...this.customers.values()].some((c) => c.member_no === p.memberNo))
+          throw new CloudRejection("member number already used", "23505");
+        if (p.marketingConsent && !p.contactNumber)
+          throw new CloudRejection("promo messages need a mobile number", "22023");
+        this.customers.set(id, {
+          id,
+          member_no: p.memberNo,
+          name: p.name,
+          birth_year: p.birthYear,
+          gender: p.gender,
+          contact_number: p.contactNumber || null,
+          privacy_consent_at: p.privacyConsentAt,
+          marketing_consent: p.marketingConsent,
+          marketing_consent_at: p.marketingConsentAt || null,
+          active: p.active,
+          notes: p.notes || null,
+          registered_at: p.registeredAt,
+          registered_by: p.registeredBy,
+          device_id: p.deviceId || null,
+          updated_at: new Date().toISOString(),
+        });
+        return id;
+      }
+      case "sync_promotion": {
+        const p = a.p as Row;
+        if (p.scope === "items" && p.kind !== "percent") throw new CloudRejection("items must be percent", "23514");
+        this.promotions.set(String(p.id), {
+          id: String(p.id),
+          name: p.name,
+          description: p.description || null,
+          kind: p.kind,
+          value: p.value,
+          scope: p.scope,
+          product_ids: p.productIds,
+          category_ids: p.categoryIds,
+          members_only: p.membersOnly,
+          min_purchase: p.minPurchase,
+          starts_on: p.startsOn || null,
+          ends_on: p.endsOn || null,
+          active: p.active,
+          updated_by: p.updatedBy,
+          updated_at: new Date().toISOString(),
+        });
+        return p.id;
+      }
+      case "members_feed":
+        return this.membersFeed(a.p_since as string | null);
       case "inventory_feed":
         return this.feed(a.p_since as string | null, String(a.p_device));
       case "sync_sale": {
@@ -365,6 +430,9 @@ export class FakeCloud {
         for (const it of payload.items as Row[]) {
           if (!this.products.has(String(it.productId))) throw new CloudRejection("product missing", "23503");
         }
+        const customerId = (payload.sale as Row).customerId;
+        if (customerId && !this.customers.has(String(customerId)))
+          throw new CloudRejection("the member is not in the cloud yet", "23503");
         this.sales.set(id, c);
         this.saleRows.push({ ...payload, receivedAt: new Date().toISOString() });
         return "inserted";

@@ -10,6 +10,8 @@ export interface CompleteSaleArgs {
   cashierName: string;
   orderDiscountDetail?: AppliedDiscountInput;
   discountApprovedBy?: string;
+  /** Member card scanned for this sale. */
+  member?: { id: string; memberNo: string };
   now?: Date;
 }
 
@@ -35,6 +37,7 @@ export async function completeSale(args: CompleteSaleArgs, db = getDb()): Promis
         payment: args.payment,
         orderDiscountDetail: args.orderDiscountDetail,
         discountApprovedBy: args.discountApprovedBy,
+        member: args.member,
         saleId,
         receiptNo: formatReceiptNo(device.deviceCode, seq),
         storeId: device.storeId,
@@ -78,7 +81,17 @@ export async function completeSale(args: CompleteSaleArgs, db = getDb()): Promis
           entityId: sale.id,
           by: sale.cashierName,
           at: sale.createdAt,
-          detail: { discountTotal: sale.discountTotal, approvedBy: args.discountApprovedBy },
+          detail: {
+            discountTotal: sale.discountTotal,
+            approvedBy: args.discountApprovedBy,
+            programs: [
+              ...new Set(
+                [args.orderDiscountDetail, ...items.map((i) => i.discount)]
+                  .filter((d) => d?.source === "promotion")
+                  .map((d) => d!.promotionId),
+              ),
+            ],
+          },
         });
       }
       return sale;

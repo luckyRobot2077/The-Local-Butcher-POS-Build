@@ -1,11 +1,13 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { PaymentRecord, SaleItemRecord, SaleRecord } from "@/domain/checkout";
+import type { DiscountProgram } from "@/domain/programs";
 import type {
   AuditEntry,
   Category,
   InventoryBatch,
   InventoryMovement,
   KeyValue,
+  Member,
   OutboxEntry,
   PriceChange,
   Product,
@@ -17,7 +19,7 @@ import type {
   Supplier,
 } from "./types";
 
-export const LOCAL_SCHEMA_VERSION = 2;
+export const LOCAL_SCHEMA_VERSION = 3;
 
 export class PosDatabase extends Dexie {
   categories!: EntityTable<Category, "id">;
@@ -37,6 +39,8 @@ export class PosDatabase extends Dexie {
   purchaseItems!: EntityTable<PurchaseItem, "id">;
   batches!: EntityTable<InventoryBatch, "id">;
   remoteSaleLines!: EntityTable<RemoteSaleLine, "id">;
+  members!: EntityTable<Member, "id">;
+  programs!: EntityTable<DiscountProgram, "id">;
 
   constructor(name = "local-butcher-pos") {
     super(name);
@@ -62,6 +66,13 @@ export class PosDatabase extends Dexie {
       purchaseItems: "id, purchaseId, productId, batchId",
       batches: "id, productId, purchaseId, useBy",
       remoteSaleLines: "id, saleId, productId, at",
+    });
+    // Phase 4: members and discount programs; sales indexed by member for purchase history.
+    this.version(3).stores({
+      sales: "id, &receiptNo, createdAt, businessDate, syncStatus, customerId",
+      remoteSaleLines: "id, saleId, productId, at, customerId",
+      members: "id, &memberNo, name, updatedAt",
+      programs: "id, updatedAt",
     });
   }
 }

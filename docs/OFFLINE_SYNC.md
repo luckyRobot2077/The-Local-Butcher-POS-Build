@@ -66,6 +66,14 @@ reports on this device cover the whole store. The cursor is the server time of t
 10 minutes; every row has a fixed id, so overlap never duplicates. If the feed is refused (for example
 the database update has not been run), sales and stock still sync and the Device tab shows the reason.
 
+**Members and programs (Phase 4, every device).** Members and discount programs are pushed before
+sales (`sync_customer`, `sync_promotion`), so a member sale never reaches the cloud before its member.
+After the pull, `members_feed(since)` downloads members and programs saved on other devices, so any
+counter can scan any card and offer every program offline. A member or program with unsent local
+changes is not overwritten. If the feed is refused, sales still sync and the Device tab shows why.
+Sale payloads only gain `customerId`, `source` and `promotionId` when they are used, so sales made
+before Phase 4 hash the same on retry.
+
 ### Conflict rules
 - Sales, payments and stock movements are append-only; there is nothing to overwrite.
 - Product edits carry `version`. If another device changed the product first, the server returns
@@ -81,4 +89,6 @@ the database update has not been run), sales and stock still sync and the Device
   selling with its cached session (by design, so the shop never stops). There is no forced
   re-authentication period yet.
 - Load the sample catalog on one device only; samples loaded on two devices become duplicates.
-- Promotions needing central usage checks are not redeemed offline (Phase 4).
+- Member edits are last-write-wins (the member number never changes).
+- Discount programs apply offline from the copy on the device; there are no per-member usage limits,
+  because those would need a central count.
