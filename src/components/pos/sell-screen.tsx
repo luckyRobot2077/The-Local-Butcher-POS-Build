@@ -324,7 +324,8 @@ export function SellScreen() {
           ))}
         </ul>
         {!landscape && quickEntry}
-        <div className="grid gap-2 border-t border-cream-300 bg-white p-3">
+        {/* minmax(0,1fr): a long program name in the dropdown must not widen the panel. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-cream-300 bg-white p-3">
           <div className="flex items-center justify-between gap-2 text-sm" data-testid="sale-member">
             {cart.member ? (
               <>
@@ -356,7 +357,7 @@ export function SellScreen() {
             <label className="grid gap-1 text-sm">
               <span className="font-semibold text-charcoal-700">Discount program</span>
               <select
-                className="min-h-10 rounded-lg border border-cream-300 bg-white px-2"
+                className="min-h-10 w-full min-w-0 truncate rounded-lg border border-cream-300 bg-white px-2"
                 value={cart.programId ?? ""}
                 onChange={(e) => {
                   const id = e.target.value || undefined;

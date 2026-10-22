@@ -15,6 +15,10 @@
   touch screen, with a Done key. Text fields (names, search, notes) still use the tablet keyboard,
   and a physical keyboard or barcode scanner still types into every field.
 
+### Fixed
+- A long discount program name made the sale panel wider than the screen (Total and Checkout ran
+  off the right edge and the page scrolled sideways). The dropdown now cuts the name to fit.
+
 ### Changed
 - Product tiles size themselves to the space left, so the grid stays readable next to the numpad.
 

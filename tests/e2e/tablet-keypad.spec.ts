@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { loadSamples, startPos } from "./helpers";
+import { addItem, loadSamples, setManagerPin, startPos } from "./helpers";
 
 async function tap(keypad: Locator, keys: string) {
   for (const k of keys) await keypad.locator(`[data-key="${k}"]`).click();
@@ -102,4 +102,35 @@ test.describe("on a touch screen", () => {
     await liempo.getByTestId("row-save").click();
     await expect(liempo.getByTestId("row-price")).toHaveValue("365.50");
   });
+});
+
+test("a long discount program name does not push the sale panel off the screen", async ({ page }) => {
+  await startPos(page);
+  await loadSamples(page);
+  await page.getByRole("link", { name: "Members" }).click();
+  await page.getByRole("tab", { name: "Discount programs" }).click();
+  await page.getByTestId("new-program").click();
+  await setManagerPin(page);
+  await page.getByTestId("program-name").fill("Suki Saturday members-only whole sale discount");
+  await page.getByTestId("program-value").fill("10");
+  await page.getByTestId("program-save").click();
+  await page.getByRole("link", { name: "Sell" }).click();
+  await addItem(page, "Bones", "2");
+  for (const [width, height] of [
+    [1280, 800],
+    [1024, 768],
+    [800, 1280],
+    [390, 844],
+  ]) {
+    await page.setViewportSize({ width, height });
+    if (width < 768) await page.getByTestId("open-cart").click();
+    await expect(page.getByTestId("program-select")).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `page wider than the screen at ${width}px`).toBe(0);
+    const panel = await page.getByRole("complementary", { name: "Current sale" }).boundingBox();
+    const checkout = await page.getByTestId("checkout").boundingBox();
+    expect(checkout!.x + checkout!.width).toBeLessThanOrEqual(panel!.x + panel!.width);
+  }
 });
