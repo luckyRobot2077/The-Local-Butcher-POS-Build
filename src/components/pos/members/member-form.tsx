@@ -10,7 +10,9 @@ import type { Member } from "@/lib/db/types";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
 import { usePos } from "../pos-context";
 
-type Errors = Partial<Record<"name" | "age" | "gender" | "contactNumber" | "privacyConsent", string>>;
+type Errors = Partial<
+  Record<"name" | "age" | "gender" | "contactNumber" | "privacyConsent" | "deliveryAddress", string>
+>;
 
 /** Register a new member, or edit one (member number and QR code never change). */
 export function MemberForm({
@@ -31,6 +33,9 @@ export function MemberForm({
   const [privacy, setPrivacy] = useState(!!member);
   const [promo, setPromo] = useState(member?.marketingConsent ?? false);
   const [notes, setNotes] = useState(member?.notes ?? "");
+  const [delivery, setDelivery] = useState(member?.wantsDelivery ?? false);
+  const [address, setAddress] = useState(member?.deliveryAddress ?? "");
+  const [landmark, setLandmark] = useState(member?.deliveryLandmark ?? "");
   const [active, setActive] = useState(member?.active ?? true);
   const [errors, setErrors] = useState<Errors>({});
   const [error, setError] = useState<string>();
@@ -65,6 +70,9 @@ export function MemberForm({
               gender: gender as Member["gender"],
               contactNumber: contact,
               marketingConsent: promo,
+              wantsDelivery: delivery,
+              deliveryAddress: delivery ? address : "",
+              deliveryLandmark: delivery ? landmark : "",
               notes,
               active,
             },
@@ -78,6 +86,9 @@ export function MemberForm({
               contactNumber: contact,
               privacyConsent: privacy as true,
               marketingConsent: promo,
+              wantsDelivery: delivery,
+              deliveryAddress: delivery ? address : "",
+              deliveryLandmark: delivery ? landmark : "",
               notes,
             },
             by,
@@ -207,6 +218,52 @@ export function MemberForm({
             can stop them any time.
           </span>
         </label>
+        <div className="grid gap-3 rounded-xl bg-white p-3 text-sm">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 size-5 shrink-0"
+              checked={delivery}
+              onChange={(e) => setDelivery(e.target.checked)}
+              data-testid="member-delivery"
+            />
+            <span>
+              <span className="font-semibold">Optional:</span> the customer wants home deliveries and agrees that the
+              store keeps their address for them. Unticking it later removes the address.
+            </span>
+          </label>
+          {delivery && (
+            <>
+              <Field
+                label="Delivery address"
+                hint="House or unit, street, barangay, city"
+                error={errors.deliveryAddress}
+              >
+                <textarea
+                  className={`${inputClass} py-2`}
+                  rows={2}
+                  value={address}
+                  maxLength={300}
+                  onChange={(e) => setAddress(e.target.value)}
+                  data-testid="member-address"
+                />
+              </Field>
+              <Field label="Landmark or directions (optional)">
+                <input
+                  className={inputClass}
+                  value={landmark}
+                  maxLength={150}
+                  onChange={(e) => setLandmark(e.target.value)}
+                  placeholder="e.g. green gate beside the sari-sari store"
+                  data-testid="member-landmark"
+                />
+              </Field>
+              {!contact.trim() && (
+                <p className="text-xs text-amber-800">Add a mobile number so the rider can call when they arrive.</p>
+              )}
+            </>
+          )}
+        </div>
         <Field label="Notes (optional)">
           <input className={inputClass} value={notes} maxLength={200} onChange={(e) => setNotes(e.target.value)} />
         </Field>

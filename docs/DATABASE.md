@@ -22,7 +22,7 @@ members and discount programs and indexes sales by member. Dexie upgrades older 
 | `purchaseItems` | id, purchaseId, productId, batchId | Quantity, unit cost, line cost |
 | `batches` | id, productId, purchaseId, useBy | One per purchase line: code, received, use-by, storage note, initial quantity, cost |
 | `remoteSaleLines` | id, saleId, productId, at, customerId | Sale lines from other devices, for profit, movement and member reports |
-| `members` | id, &memberNo, name, updatedAt | Members: number, name, birth year, gender, mobile (+639…), privacy consent time, promo consent and time, active |
+| `members` | id, &memberNo, name, updatedAt | Members: number, name, birth year, gender, mobile (+639…), privacy consent time, promo consent and time, optional delivery address and landmark (only while `wantsDelivery`), active |
 | `programs` | id, updatedAt | Discount programs: percent/fixed, whole sale or items (products, categories), members only, minimum purchase, dates, on/off |
 | `outbox` | id, kind, status, entityId | Durable sync queue (sale, product, inventory_movement, product_image, supplier, purchase, purchase_payment, customer, promotion) |
 | `auditLog` | id, action, at | Product edits, stock changes, discounts, prints |
@@ -91,4 +91,11 @@ Timestamps are `timestamptz` (UTC). `business_date` is the Asia/Manila calendar 
 - `sync_sale` replaced: stores `customer_id` (refused if the member is not in the cloud yet) and, for
   program discounts, `source = 'promotion'` with `promotion_id`. Payloads without these keys are stored as before.
 - `inventory_feed` replaced: sale lines include `customer_id` for member history on owner/manager devices.
+
+### `20261025000007_member_delivery.sql`
+
+- `customers.wants_delivery`, `delivery_consent_at`, `delivery_address` (≤300), `delivery_landmark` (≤150);
+  a check keeps the address only while `wants_delivery` is on.
+- `sync_customer` and `members_feed` replaced to carry these fields. A payload without `wantsDelivery`
+  (older app) leaves them unchanged; turning delivery off clears the address.
 

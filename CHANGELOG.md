@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 — 2026-10-22 — Member delivery address
+
+### Added
+- Optional home delivery for members: a separate tick box (the customer wants deliveries and agrees the
+  store keeps their address), then address and an optional landmark. Unticking it removes the address
+  on every device. Shown on the member's details with a "Delivery" badge in the list.
+- Supabase migration 7: delivery columns with a check that no address is kept without consent;
+  `sync_customer` and `members_feed` updated. Devices on the previous app version keep the address
+  when they edit a member.
+- Tests: 2 database and sync tests, 6 PostgreSQL checks, browser test extended.
+
 ## 0.4.0 — 2026-10-22 — Phase 4: members and discount programs
 
 ### Added

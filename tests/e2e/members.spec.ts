@@ -25,6 +25,9 @@ test("discount program and member card: register, attach to a sale, see history"
   await page.getByTestId("member-gender").selectOption("female");
   await page.getByTestId("member-contact").fill("0917 123 4567");
   await page.getByTestId("member-promo").check();
+  await page.getByTestId("member-delivery").check();
+  await page.getByTestId("member-address").fill("12 Mabini St, Brgy San Isidro, Quezon City");
+  await page.getByTestId("member-landmark").fill("green gate");
   await page.getByTestId("member-save").click();
   await expect(page.getByTestId("member-privacy").locator("..")).toContainText("must agree");
   await page.getByTestId("member-privacy").check();
@@ -35,6 +38,8 @@ test("discount program and member card: register, attach to a sale, see history"
   const info = page.getByTestId("member-info");
   const memberNo = (await info.textContent())!.match(/M-[A-Z0-9]{4}-\d{4}/)![0];
   await expect(info).toContainText("0917 123 4567");
+  await expect(page.getByTestId("member-delivery-info")).toContainText("12 Mabini St");
+  await expect(page.getByTestId("member-delivery-info")).toContainText("Landmark: green gate");
   await expect(page.getByTestId("member-summary")).toContainText("0 visits");
   await page.keyboard.press("Escape");
 

@@ -63,6 +63,7 @@ export function MembersTab() {
               <span className="flex gap-1">
                 {!m.active && <Badge tone="danger">Off</Badge>}
                 {m.marketingConsent && <Badge tone="ok">Promos</Badge>}
+                {m.wantsDelivery && <Badge tone="info">Delivery</Badge>}
               </span>
             </button>
           </li>
@@ -116,6 +117,19 @@ function MemberDetail({ id, onClose, onEdit }: { id: string; onClose: () => void
             <dd>{member.contactNumber ? formatPhMobile(member.contactNumber) : "—"}</dd>
             <dt className="text-charcoal-500">Promo texts</dt>
             <dd>{member.marketingConsent ? "Yes" : "No"}</dd>
+            <dt className="text-charcoal-500">Home delivery</dt>
+            <dd data-testid="member-delivery-info">
+              {member.wantsDelivery && member.deliveryAddress ? (
+                <>
+                  <span className="whitespace-pre-line">{member.deliveryAddress}</span>
+                  {member.deliveryLandmark && (
+                    <span className="block text-xs text-charcoal-500">Landmark: {member.deliveryLandmark}</span>
+                  )}
+                </>
+              ) : (
+                "No"
+              )}
+            </dd>
             <dt className="text-charcoal-500">Registered</dt>
             <dd>
               {formatManila(member.registeredAt)} by {member.registeredBy || "—"}

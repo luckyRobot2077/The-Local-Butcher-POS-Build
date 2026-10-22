@@ -174,6 +174,13 @@ export interface Member {
   /** Agreed to member-only promo messages (SMS). Optional and can be withdrawn. */
   marketingConsent: boolean;
   marketingConsentAt?: string;
+  /** Wants home deliveries and agreed to the store keeping their address. Optional. */
+  wantsDelivery?: boolean;
+  deliveryConsentAt?: string;
+  /** House/unit, street, barangay, city. Only kept while wantsDelivery is on. */
+  deliveryAddress?: string;
+  /** Landmark or directions for the rider. */
+  deliveryLandmark?: string;
   active: boolean;
   notes?: string;
   registeredAt: string;
