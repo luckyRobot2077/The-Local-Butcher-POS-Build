@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addItem, loadSamples, setManagerPin, startPos } from "./helpers";
+import { addItem, capturePrintFrame, loadSamples, pdfPages, setManagerPin, startPos } from "./helpers";
 
 test("discount program and member card: register, attach to a sale, see history", async ({ page }) => {
   await startPos(page);
@@ -41,6 +41,19 @@ test("discount program and member card: register, attach to a sale, see history"
   await expect(page.getByTestId("member-delivery-info")).toContainText("12 Mabini St");
   await expect(page.getByTestId("member-delivery-info")).toContainText("Landmark: green gate");
   await expect(page.getByTestId("member-summary")).toContainText("0 visits");
+
+  // Printing uses a frame holding only the card, so it comes out as one card-size page.
+  await capturePrintFrame(page);
+  await page.getByTestId("print-card").click();
+  await expect(page.locator("body")).toHaveAttribute("data-printed", /size: 85\.6mm 54mm/);
+  const printPage = await page.context().newPage();
+  await printPage.setContent((await page.locator("body").getAttribute("data-printed"))!);
+  const pdf = pdfPages(await printPage.pdf({ preferCSSPageSize: true }));
+  await printPage.close();
+  // One page, 85.6 × 54 mm in points.
+  expect(pdf.count).toBe(1);
+  expect(pdf.width).toBeCloseTo(242.6, 0);
+  expect(pdf.height).toBeCloseTo(153.1, 0);
   await page.keyboard.press("Escape");
 
   // At the counter the program waits for a member card.

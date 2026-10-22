@@ -5,7 +5,7 @@
 | Item | Status |
 |---|---|
 | Receipt renderer (32 columns, word wrap, discounts, NON-FISCAL header) | ✅ implemented and unit tested |
-| Browser print adapter (system print dialog, 58 mm print CSS) | ✅ implemented |
+| Browser print adapter (system print dialog, its own 58 mm page with the grey logo) | ✅ implemented |
 | Reprint without creating a sale; print count + audit | ✅ implemented and tested |
 | Direct PT-210 printing (Bluetooth / USB) | ❌ **not implemented, not verified** |
 

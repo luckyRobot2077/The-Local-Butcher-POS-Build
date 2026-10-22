@@ -6,12 +6,13 @@
  * sales sync is handled by the app itself when it is open (Phase 2).
  *
  * Caches:
- *  - STATIC_CACHE: content-hashed build assets (/_next/static) and icons.
+ *  - STATIC_CACHE: content-hashed build assets (/_next/static), icons and
+ *    the logo. Icons and the logo are fetched again on every install.
  *    Names are immutable, so this cache is shared across versions and old
  *    pages keep working while an update rolls out.
  *  - PAGES_CACHE: HTML for the app routes, refreshed on every online visit.
  */
-const VERSION = "v3";
+const VERSION = "v4";
 const STATIC_CACHE = "tlb-static";
 const PAGES_CACHE = `tlb-pages-${VERSION}`;
 const APP_ROUTES = ["/pos", "/pos/products", "/pos/members", "/pos/inventory", "/pos/history", "/pos/device", "/office", "/"];
@@ -22,6 +23,8 @@ const EXTRA_ASSETS = [
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
   "/icons/apple-touch-icon.png",
+  "/brand/logo.jpg",
+  "/brand/logo-receipt.png",
 ];
 const ASSET_RE = /\/_next\/static\/[^"'\s)\\]+/g;
 
@@ -104,7 +107,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return; // always live
-  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
+  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/") || url.pathname.startsWith("/brand/")) {
     event.respondWith(cacheFirst(request));
     return;
   }

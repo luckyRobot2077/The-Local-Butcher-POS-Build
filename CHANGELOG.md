@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.2 — 2026-10-22 — Brand theme and printing fixes
+
+### Changed
+- Colours now match The Local Butcher, Argao logo: butcher red, navy and cream. Navy header with a red
+  stripe, the logo in the header and on the start page, and new app icons and favicon made from the
+  logo. Fonts are unchanged. The original logo is kept in `docs/brand/`.
+- Member card redesigned with the logo, a red "MEMBER" label, navy name, red member number and a navy
+  band. The QR code and member number are unchanged.
+- Receipts start with a grey version of the logo (thermal printers print it in black dots).
+
+### Fixed
+- Printing a member card gave two pages and cut the card off, because the card sat inside a dialog
+  that clipped it. Cards now print from their own page at 85.6 × 54 mm with no margins: one card, one
+  page.
+- Receipts print the same way, on a page sized to 58 mm paper and the receipt's length, in a type size
+  that fits a full 32-character line in the 48 mm printable width (long lines were cut off before).
+- Tests: browser checks that the card prints as one 85.6 × 54 mm page and the receipt as one 58 mm
+  page with nothing cut off.
+
 ## 0.4.1 — 2026-10-22 — Member delivery address
 
 ### Added

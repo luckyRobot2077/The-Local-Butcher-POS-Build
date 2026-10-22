@@ -9,7 +9,7 @@ const variants: Record<Variant, string> = {
   secondary: "bg-white text-charcoal-900 border border-cream-300 hover:bg-cream-50 disabled:text-charcoal-500",
   danger: "bg-red-700 text-white hover:bg-red-800 disabled:bg-red-300",
   ghost: "bg-transparent text-charcoal-700 hover:bg-cream-200",
-  success: "bg-emerald-700 text-white hover:bg-emerald-800 disabled:bg-emerald-300",
+  success: "bg-navy-800 text-cream-50 hover:bg-navy-900 disabled:bg-navy-100 disabled:text-charcoal-500",
 };
 
 export function Button({
