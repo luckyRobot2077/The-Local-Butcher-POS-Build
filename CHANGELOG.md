@@ -15,6 +15,7 @@
   paid, no-sale openings, close with the count).
 - Back Office → Shifts: shifts from every device for a date range, with the same timeline, the
   over/short and a CSV with one row per time stamp.
+- The shifts CSV gives the Manila time to the second ("Oct 22, 2026, 09:58:30 AM").
 - Supabase migration 11 (`20261029000011_shifts.sql`), safe to run twice. Until it is run, the
   device lists the shift as a sync problem ("the cloud database needs an update"); sales still sync.
 

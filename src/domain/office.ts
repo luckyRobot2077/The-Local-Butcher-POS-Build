@@ -4,7 +4,7 @@
  * grouping and CSV files. Money is centavos; kg quantities are grams.
  */
 import type { Centavos } from "./money";
-import { formatManila } from "./time";
+import { formatManila, formatManilaSeconds } from "./time";
 import { cashDifference, shiftTimeline, type TimelineEntry } from "./shift";
 
 export interface DailyPoint {
@@ -467,7 +467,7 @@ export function shiftsCsv(shifts: OfficeShift[]): string {
   for (const sh of [...shifts].sort((a, b) => a.opened_at.localeCompare(b.opened_at))) {
     for (const e of officeShiftTimeline(sh)) {
       rows.push([
-        formatManila(e.at),
+        formatManilaSeconds(e.at),
         e.at,
         sh.device_code,
         sh.opened_at,
