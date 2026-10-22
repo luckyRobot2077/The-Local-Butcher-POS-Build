@@ -3,6 +3,7 @@ import type { AppliedDiscountInput, CartTotals } from "@/domain/cart";
 import { getDb } from "./db";
 import { ensureDevice } from "./config";
 import { newId, nowIso } from "./ids";
+import { OPEN_SHIFT_KEY } from "./shifts";
 
 export interface CompleteSaleArgs {
   totals: CartTotals;
@@ -12,6 +13,8 @@ export interface CompleteSaleArgs {
   discountApprovedBy?: string;
   /** Member card scanned for this sale. */
   member?: { id: string; memberNo: string };
+  /** When the first item went into the cart. */
+  startedAt?: string;
   now?: Date;
 }
 
@@ -32,12 +35,15 @@ export async function completeSale(args: CompleteSaleArgs, db = getDb()): Promis
       const seq = (((await db.config.get("receiptSeq"))?.value as number | undefined) ?? 0) + 1;
       await db.config.put({ key: "receiptSeq", value: seq });
       const now = args.now ?? new Date();
+      const shiftId = (await db.config.get(OPEN_SHIFT_KEY))?.value as string | undefined;
       const { sale, items, payment } = buildSale({
         totals: args.totals,
         payment: args.payment,
         orderDiscountDetail: args.orderDiscountDetail,
         discountApprovedBy: args.discountApprovedBy,
         member: args.member,
+        startedAt: args.startedAt,
+        shiftId,
         saleId,
         receiptNo: formatReceiptNo(device.deviceCode, seq),
         storeId: device.storeId,

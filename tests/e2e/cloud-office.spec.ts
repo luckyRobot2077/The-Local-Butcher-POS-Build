@@ -423,3 +423,75 @@ test("the Back Office asks for the database update when migration 10 is missing"
   await signIn(page);
   await expect(page.getByText("The cloud database needs an update")).toBeVisible();
 });
+
+test("Shifts page: every device's shifts with times, cash count, no-sale openings and CSV", async ({ page }) => {
+  const shift = {
+    id: "90000000-0000-0000-0000-000000000001",
+    device_code: "AB12",
+    device_label: "Counter tablet",
+    opened_at: "2026-10-22T00:00:00Z",
+    opened_by: "Ana Reyes",
+    opening_float: 100000,
+    closed_at: "2026-10-22T10:00:00Z",
+    closed_by: "Ana Reyes",
+    counted_cash: 132000,
+    expected_cash: 132400,
+    note: "Gave extra change",
+    cash_sales: 32400,
+    gcash_sales: 0,
+    sale_count: 1,
+    sales: [
+      {
+        receipt_no: "AB12-000001",
+        cashier: "Ana Reyes",
+        started_at: "2026-10-22T01:58:30Z",
+        paid_at: "2026-10-22T02:00:00Z",
+        total: 32400,
+        method: "cash",
+      },
+    ],
+    events: [
+      {
+        kind: "no_sale",
+        at: "2026-10-22T03:00:00Z",
+        by: "Ana Reyes",
+        approved_by: "Josh",
+        reason: "Change for a customer",
+      },
+    ],
+  };
+  await fakeSupabase(page, {
+    whoami: whoami("owner"),
+    office_status: () => ({ setupOpen: false, accountRole: "owner", employees: 2 }),
+    office_unlock: () => SESSION,
+    office_report: (b) => fakeReport(b.p_from as string | null, b.p_to as string, []),
+    office_shifts: (b) =>
+      b.p_token === SESSION.token ? { shifts: [shift] } : { status: 403, body: { code: "42501", message: "locked" } },
+  });
+  await signIn(page);
+  await unlock(page, "TLB-STAFF:owner", "123456");
+  await page.getByTestId("office-tab-shifts").click();
+  const row = page.getByTestId("office-shift");
+  await expect(row).toContainText("Ana Reyes");
+  await expect(row.getByTestId("office-shift-difference")).toHaveText("Short by ₱4.00");
+  await row.locator("summary").click();
+  const entries = row.getByTestId("timeline-entry");
+  await expect(entries).toHaveCount(5);
+  await expect(entries.nth(0)).toContainText("Shift started");
+  await expect(entries.nth(1)).toContainText("Sale AB12-000001 started");
+  await expect(entries.nth(2)).toContainText("Sale AB12-000001 paid");
+  await expect(entries.nth(3)).toContainText("approved by Josh");
+  await expect(entries.nth(4)).toContainText("counted ₱1,320.00, expected ₱1,324.00");
+  const download = page.waitForEvent("download");
+  await page.getByTestId("shifts-csv").click();
+  const csv = await (await download).createReadStream().then(
+    (s) =>
+      new Promise<string>((resolve) => {
+        let t = "";
+        s.on("data", (c) => (t += c));
+        s.on("end", () => resolve(t));
+      }),
+  );
+  expect(csv.split("\r\n")).toHaveLength(6);
+  expect(csv).toContain('"Drawer opened, no sale"');
+});

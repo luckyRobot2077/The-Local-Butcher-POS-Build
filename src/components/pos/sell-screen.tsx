@@ -7,6 +7,8 @@ import { getDb } from "@/lib/db/db";
 import { listCategories } from "@/lib/db/products";
 import { loadSampleCatalog } from "@/lib/db/seed";
 import type { Product } from "@/lib/db/types";
+import type { Shift } from "@/domain/shift";
+import { getOpenShift } from "@/lib/db/shifts";
 import { formatPeso } from "@/domain/money";
 import { formatQuantity, unitLabel } from "@/domain/quantity";
 import {
@@ -31,6 +33,7 @@ import { usePos } from "./pos-context";
 import { ProductTile } from "./product-tile";
 import { QuantityDialog } from "./quantity-dialog";
 import { QuickEntry } from "./quick-entry";
+import { OpenShiftDialog, ShiftDialog } from "./shift-dialogs";
 import { DiscountDialog } from "./discount-dialog";
 import { CheckoutDialog } from "./checkout-dialog";
 import { ReceiptView } from "./receipt-view";
@@ -57,10 +60,13 @@ type Dialog =
   | { type: "void" }
   | { type: "done"; saleId: string }
   | { type: "member" }
+  | { type: "shift"; shift: Shift }
   | null;
 
 export function SellScreen() {
-  const { settings, cashierName, requestManager } = usePos();
+  const { settings, cashierName, requestManager, badgeSignIn, employee } = usePos();
+  // null = no shift open on this device (undefined while loading).
+  const openShift = useLiveQuery(async () => (await getOpenShift()) ?? null, []);
   const requestSync = useRequestSync();
   const products = useLiveQuery(() => getDb().products.toArray(), []);
   const categories = useLiveQuery(() => listCategories(), []);
@@ -141,8 +147,9 @@ export function SellScreen() {
   }
 
   function addProduct(p: Product, qty: number, fixedAmount?: number) {
+    // The sale starts when its first item goes in.
     setCart((c) =>
-      addLine(c, {
+      addLine(c.lines.length === 0 ? { ...c, startedAt: new Date().toISOString() } : c, {
         lineId: crypto.randomUUID(),
         productId: p.id,
         productName: p.name,
@@ -255,6 +262,16 @@ export function SellScreen() {
         <div className="flex items-center justify-between border-b border-cream-200 px-3 py-2">
           <h2 className="font-bold text-burgundy-800">Current sale</h2>
           <div className="flex gap-1">
+            {openShift && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDialog({ type: "shift", shift: openShift })}
+                data-testid="shift-button"
+              >
+                Shift
+              </Button>
+            )}
             {lineCount > 0 && (
               <Button variant="ghost" size="sm" onClick={() => setDialog({ type: "void" })}>
                 Clear
@@ -427,7 +444,7 @@ export function SellScreen() {
           <Button
             size="lg"
             variant="success"
-            disabled={!totals || lineCount === 0}
+            disabled={!totals || lineCount === 0 || !openShift}
             onClick={startCheckout}
             data-testid="checkout"
           >
@@ -444,6 +461,11 @@ export function SellScreen() {
           </Button>
         </div>
       )}
+
+      {openShift === null && dialog?.type !== "shift" && cashierName && (!badgeSignIn || employee) && (
+        <OpenShiftDialog />
+      )}
+      {dialog?.type === "shift" && <ShiftDialog shift={dialog.shift} onClose={() => setDialog(null)} />}
 
       {dialog?.type === "add" && (
         <QuantityDialog
@@ -548,6 +570,7 @@ export function SellScreen() {
           cashierName={cashierName}
           orderDiscountDetail={effective.orderDiscount}
           member={cart.member}
+          startedAt={cart.startedAt}
           discountApprovedBy={
             totals.maxDiscountBasisPoints > settings.cashierDiscountLimitBp ? discountApprovedBy : undefined
           }

@@ -26,3 +26,16 @@ export function businessDate(at: Date): string {
 export function formatManila(iso: string): string {
   return dateTimeFmt.format(new Date(iso));
 }
+
+const timeFmt = new Intl.DateTimeFormat("en-PH", {
+  timeZone: BUSINESS_TIMEZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: true,
+});
+
+/** Time of day in Manila with seconds, e.g. "08:02:15 AM", for shift timelines. */
+export function formatManilaTime(iso: string): string {
+  return timeFmt.format(new Date(iso));
+}

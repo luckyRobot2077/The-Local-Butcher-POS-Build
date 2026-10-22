@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { findSales } from "@/lib/db/sales";
+import { listShifts, shiftEvents, shiftSales } from "@/lib/db/shifts";
+import { shiftTimeline, type Shift } from "@/domain/shift";
+import { ShiftTimeline, differenceLabel } from "@/components/shift-timeline";
 import { getDb } from "@/lib/db/db";
 import { formatPeso } from "@/domain/money";
 import { businessDate, formatManila } from "@/domain/time";
@@ -10,6 +13,86 @@ import { Badge, Modal } from "@/components/ui";
 import { ReceiptView } from "./receipt-view";
 
 export function HistoryScreen() {
+  const [tab, setTab] = useState<"sales" | "shifts">("sales");
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex gap-2 border-b border-cream-200 bg-cream-50 px-2 pt-2" role="tablist">
+        {(
+          [
+            ["sales", "Sales"],
+            ["shifts", "Shifts"],
+          ] as const
+        ).map(([t, label]) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={`min-h-10 rounded-t-xl px-4 font-semibold ${
+              tab === t ? "bg-white text-burgundy-800" : "text-charcoal-700"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "sales" ? <SalesHistory /> : <ShiftHistory />}
+    </div>
+  );
+}
+
+/** Shifts on this device, newest first; each opens its timeline. */
+function ShiftHistory() {
+  const shifts = useLiveQuery(() => listShifts(), []);
+  const [open, setOpen] = useState<Shift>();
+  const timeline = useLiveQuery(
+    async () => (open ? shiftTimeline(open, await shiftSales(open.id), await shiftEvents(open.id)) : undefined),
+    [open?.id],
+  );
+  return (
+    <>
+      <ul className="min-h-0 flex-1 divide-y divide-cream-200 overflow-y-auto bg-white" data-testid="shift-list">
+        {shifts?.length === 0 && <li className="p-6 text-center text-charcoal-500">No shifts on this device yet.</li>}
+        {shifts?.map((sh) => (
+          <li key={sh.id}>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-cream-50"
+              onClick={() => setOpen(sh)}
+              data-testid="shift-row"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">
+                  {formatManila(sh.openedAt)} · {sh.openedBy}
+                </div>
+                <div className="text-sm text-charcoal-500">
+                  {sh.closedAt
+                    ? `Closed ${formatManila(sh.closedAt)} by ${sh.closedBy} · ${sh.saleCount} sale${sh.saleCount === 1 ? "" : "s"}`
+                    : "Open now"}
+                </div>
+              </div>
+              {sh.closedAt ? (
+                <Badge tone={sh.countedCash === sh.expectedCash ? "ok" : "warn"}>
+                  {differenceLabel(sh.countedCash!, sh.expectedCash!)}
+                </Badge>
+              ) : (
+                <Badge tone="info">Open</Badge>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {open && (
+        <Modal open onClose={() => setOpen(undefined)} title="Shift timeline">
+          {timeline && <ShiftTimeline entries={timeline} />}
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function SalesHistory() {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string>();
   const sales = useLiveQuery(() => findSales(query), [query]);
@@ -25,7 +108,7 @@ export function HistoryScreen() {
   }, []);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <>
       {today && (
         <div
           className="grid grid-cols-2 gap-2 border-b border-cream-200 bg-cream-50 p-2 sm:grid-cols-4"
@@ -85,7 +168,7 @@ export function HistoryScreen() {
           </p>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
 

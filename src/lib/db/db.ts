@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { PaymentRecord, SaleItemRecord, SaleRecord } from "@/domain/checkout";
 import type { DiscountProgram } from "@/domain/programs";
+import type { DrawerEvent, Shift } from "@/domain/shift";
 import type {
   AuditEntry,
   Category,
@@ -19,7 +20,7 @@ import type {
   Supplier,
 } from "./types";
 
-export const LOCAL_SCHEMA_VERSION = 3;
+export const LOCAL_SCHEMA_VERSION = 4;
 
 export class PosDatabase extends Dexie {
   categories!: EntityTable<Category, "id">;
@@ -41,6 +42,8 @@ export class PosDatabase extends Dexie {
   remoteSaleLines!: EntityTable<RemoteSaleLine, "id">;
   members!: EntityTable<Member, "id">;
   programs!: EntityTable<DiscountProgram, "id">;
+  shifts!: EntityTable<Shift, "id">;
+  drawerEvents!: EntityTable<DrawerEvent, "id">;
 
   constructor(name = "local-butcher-pos") {
     super(name);
@@ -73,6 +76,12 @@ export class PosDatabase extends Dexie {
       remoteSaleLines: "id, saleId, productId, at, customerId",
       members: "id, &memberNo, name, updatedAt",
       programs: "id, updatedAt",
+    });
+    // Phase 5d: cashier shifts and drawer openings; sales indexed by shift.
+    this.version(4).stores({
+      sales: "id, &receiptNo, createdAt, businessDate, syncStatus, customerId, shiftId",
+      shifts: "id, openedAt",
+      drawerEvents: "id, shiftId, at",
     });
   }
 }

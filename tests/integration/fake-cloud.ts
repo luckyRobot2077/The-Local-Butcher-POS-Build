@@ -33,6 +33,8 @@ export class FakeCloud {
   movements = new Map<string, Row>();
   sales = new Map<string, string>(); // id -> canonical payload
   employees: Record<string, unknown>[] = [];
+  shifts = new Map<string, Row>();
+  drawerEvents = new Map<string, Row>();
   saleRows: (Row & { receivedAt: string })[] = [];
   suppliers = new Map<string, Row & { id: string; name: string; updated_at: string }>();
   customers = new Map<string, Row & { id: string; updated_at: string }>();
@@ -441,6 +443,26 @@ export class FakeCloud {
           throw new CloudRejection("the member is not in the cloud yet", "23503");
         this.sales.set(id, c);
         this.saleRows.push({ ...payload, receivedAt: new Date().toISOString() });
+        return "inserted";
+      }
+      case "sync_shift": {
+        const p = a.p as Row;
+        const prev = this.shifts.get(String(p.id));
+        if (!prev) {
+          this.shifts.set(String(p.id), { ...p });
+          return "inserted";
+        }
+        if (p.closedAt && !prev.closedAt) {
+          this.shifts.set(String(p.id), { ...prev, ...p });
+          return "closed";
+        }
+        return "unchanged";
+      }
+      case "sync_drawer_event": {
+        const p = a.p as Row;
+        if (!this.shifts.has(String(p.shiftId))) throw new CloudRejection("shift not in the cloud yet", "23503");
+        if (this.drawerEvents.has(String(p.id))) return "duplicate";
+        this.drawerEvents.set(String(p.id), { ...p });
         return "inserted";
       }
       case "member_visits": {

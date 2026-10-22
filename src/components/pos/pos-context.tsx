@@ -38,6 +38,8 @@ interface PosContextValue {
   managerUnlocked: boolean;
   /** Ask for the manager PIN (or reuse a recent unlock). Resolves true when approved. */
   requestManager: (reason: string) => Promise<boolean>;
+  /** Same, resolving to who approved ("Josh", or "Manager PIN"), or null when refused. */
+  requestApproval: (reason: string) => Promise<string | null>;
   lockManager: () => void;
   changeCashier: () => void;
   /** The employee signed in with their badge, once the shop uses employee IDs. */
@@ -64,7 +66,8 @@ export function PosProvider({ children }: { children: ReactNode }) {
   const [managerUnlocked, setManagerUnlocked] = useState(false);
   const unlockedUntil = useRef(0);
   const lockTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [pinRequest, setPinRequest] = useState<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
+  const [pinRequest, setPinRequest] = useState<{ reason: string; resolve: (by: string | null) => void } | null>(null);
+  const lastApprover = useRef("Manager PIN");
   const [askCashier, setAskCashier] = useState(false);
   const employees = useLiveQuery(() => getEmployees(), []);
   const [employee, setEmployee] = useState<SignedInEmployee>();
@@ -107,10 +110,14 @@ export function PosProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => clearTimeout(lockTimer.current), []);
 
-  const requestManager = useCallback((reason: string) => {
-    if (unlockedUntil.current > Date.now()) return Promise.resolve(true);
-    return new Promise<boolean>((resolve) => setPinRequest({ reason, resolve }));
+  const requestApproval = useCallback((reason: string) => {
+    if (unlockedUntil.current > Date.now()) return Promise.resolve<string | null>(lastApprover.current);
+    return new Promise<string | null>((resolve) => setPinRequest({ reason, resolve }));
   }, []);
+  const requestManager = useCallback(
+    async (reason: string) => (await requestApproval(reason)) !== null,
+    [requestApproval],
+  );
 
   const value: PosContextValue = {
     ready,
@@ -120,6 +127,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     cashierName: cashierName ?? "",
     managerUnlocked,
     requestManager,
+    requestApproval,
     lockManager: lock,
     changeCashier: () => {
       if (!badgeSignIn) return setAskCashier(true);
@@ -152,8 +160,11 @@ export function PosProvider({ children }: { children: ReactNode }) {
           current={employee}
           approvers={approvers}
           onDone={(by) => {
-            if (by) unlock();
-            pinRequest.resolve(!!by);
+            if (by) {
+              lastApprover.current = by.name;
+              unlock();
+            }
+            pinRequest.resolve(by ? by.name : null);
             setPinRequest(null);
           }}
         />
@@ -162,8 +173,11 @@ export function PosProvider({ children }: { children: ReactNode }) {
         <PinDialog
           reason={pinRequest.reason}
           onDone={(ok) => {
-            if (ok) unlock();
-            pinRequest.resolve(ok);
+            if (ok) {
+              lastApprover.current = "Manager PIN";
+              unlock();
+            }
+            pinRequest.resolve(ok ? "Manager PIN" : null);
             setPinRequest(null);
           }}
         />

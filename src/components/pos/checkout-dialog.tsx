@@ -24,6 +24,7 @@ export function CheckoutDialog({
   orderDiscountDetail,
   discountApprovedBy,
   member,
+  startedAt,
   onClose,
   onCompleted,
 }: {
@@ -32,6 +33,8 @@ export function CheckoutDialog({
   orderDiscountDetail?: AppliedDiscountInput;
   discountApprovedBy?: string;
   member?: { id: string; memberNo: string; name: string };
+  /** When the first item went into the cart. */
+  startedAt?: string;
   onClose: () => void;
   onCompleted: (saleId: string) => void;
 }) {
@@ -61,6 +64,7 @@ export function CheckoutDialog({
         orderDiscountDetail,
         discountApprovedBy,
         member: member && { id: member.id, memberNo: member.memberNo },
+        startedAt,
       });
       onCompleted(sale.id);
     } catch (e) {

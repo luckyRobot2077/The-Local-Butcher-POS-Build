@@ -5,6 +5,7 @@
  */
 import type { Centavos } from "./money";
 import { formatManila } from "./time";
+import { cashDifference, shiftTimeline, type TimelineEntry } from "./shift";
 
 export interface DailyPoint {
   date: string;
@@ -381,5 +382,124 @@ export function saleLinesCsv(rows: SaleLineRow[]): string {
       csvPeso(l.cost),
       csvPeso(l.net - l.cost),
     ]),
+  );
+}
+
+/* ------------------------------------------------------------------ shifts */
+
+/** One shift as office_shifts returns it, with its sales and drawer openings. */
+export interface OfficeShift {
+  id: string;
+  device_code: string;
+  device_label: string | null;
+  opened_at: string;
+  opened_by: string;
+  opening_float: Centavos;
+  closed_at: string | null;
+  closed_by: string | null;
+  counted_cash: Centavos | null;
+  expected_cash: Centavos | null;
+  note: string | null;
+  cash_sales: Centavos;
+  gcash_sales: Centavos;
+  sale_count: number;
+  sales: {
+    receipt_no: string;
+    cashier: string;
+    started_at: string | null;
+    paid_at: string;
+    total: Centavos;
+    method: "cash" | "gcash";
+  }[];
+  events: { kind: "no_sale"; at: string; by: string; approved_by: string | null; reason: string }[];
+}
+
+/** The shift's timeline in the same shape the counter shows. */
+export function officeShiftTimeline(sh: OfficeShift): TimelineEntry[] {
+  return shiftTimeline(
+    {
+      id: sh.id,
+      deviceId: "",
+      openedAt: sh.opened_at,
+      openedBy: sh.opened_by,
+      openingFloat: sh.opening_float,
+      ...(sh.closed_at
+        ? {
+            closedAt: sh.closed_at,
+            closedBy: sh.closed_by ?? "",
+            countedCash: sh.counted_cash ?? 0,
+            expectedCash: sh.expected_cash ?? 0,
+          }
+        : {}),
+    },
+    sh.sales.map((s) => ({
+      receiptNo: s.receipt_no,
+      cashierName: s.cashier,
+      startedAt: s.started_at ?? undefined,
+      createdAt: s.paid_at,
+      total: s.total,
+      paymentMethod: s.method,
+    })),
+    sh.events.map((e, i) => ({
+      id: String(i),
+      shiftId: sh.id,
+      deviceId: "",
+      kind: e.kind,
+      at: e.at,
+      by: e.by,
+      approvedBy: e.approved_by ?? undefined,
+      reason: e.reason,
+    })),
+  );
+}
+
+const TIMELINE_LABEL: Record<TimelineEntry["type"], string> = {
+  shift_open: "Shift started",
+  sale_started: "Sale started",
+  sale_paid: "Sale paid",
+  no_sale: "Drawer opened, no sale",
+  shift_close: "Shift closed",
+};
+
+/** Every timestamped event of the shifts, one row each, for the owner's records. */
+export function shiftsCsv(shifts: OfficeShift[]): string {
+  const rows: (string | number | null)[][] = [];
+  for (const sh of [...shifts].sort((a, b) => a.opened_at.localeCompare(b.opened_at))) {
+    for (const e of officeShiftTimeline(sh)) {
+      rows.push([
+        formatManila(e.at),
+        e.at,
+        sh.device_code,
+        sh.opened_at,
+        TIMELINE_LABEL[e.type],
+        e.by,
+        "receiptNo" in e ? e.receiptNo : null,
+        "amount" in e ? csvPeso(e.amount) : null,
+        e.type === "sale_paid" ? (e.method === "cash" ? "Cash" : "GCash") : null,
+        e.type === "shift_close" ? csvPeso(e.expected) : null,
+        // A number, not text: a leading minus must not be treated as a formula.
+        e.type === "shift_close" ? Number(csvPeso(cashDifference(e.amount, e.expected))) : null,
+        e.type === "no_sale" ? e.reason : e.type === "shift_close" ? sh.note : null,
+        e.type === "no_sale" ? (e.approvedBy ?? null) : null,
+      ]);
+    }
+  }
+  return toCsv(
+    [
+      "Time (Manila)",
+      "Time (UTC)",
+      "Device",
+      "Shift started (UTC)",
+      "Event",
+      "By",
+      "Receipt",
+      "Amount (PHP)",
+      "Payment",
+      "Expected cash (PHP)",
+      "Over (+) / short (-) (PHP)",
+      "Reason / note",
+      "Approved by",
+    ],
+    rows,
   );
 }

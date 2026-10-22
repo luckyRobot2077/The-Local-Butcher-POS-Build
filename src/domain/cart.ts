@@ -44,6 +44,8 @@ export interface Cart {
   programId?: string;
   /** Member card attached to this sale. */
   member?: { id: string; memberNo: string; name: string };
+  /** When the first item went in (UTC ISO-8601), kept on the sale as its start time. */
+  startedAt?: string;
 }
 
 export interface StackingPolicy {
