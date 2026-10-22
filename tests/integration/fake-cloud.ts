@@ -371,6 +371,7 @@ export class FakeCloud {
         if (cur && cur.member_no !== p.memberNo) throw new CloudRejection("member numbers cannot change", "22023");
         if (!cur && [...this.customers.values()].some((c) => c.member_no === p.memberNo))
           throw new CloudRejection("member number already used", "23505");
+        if (p.wantsDelivery && !p.deliveryAddress) throw new CloudRejection("delivery needs an address", "22023");
         if (p.marketingConsent && !p.contactNumber)
           throw new CloudRejection("promo messages need a mobile number", "22023");
         this.customers.set(id, {
@@ -383,6 +384,10 @@ export class FakeCloud {
           privacy_consent_at: p.privacyConsentAt,
           marketing_consent: p.marketingConsent,
           marketing_consent_at: p.marketingConsentAt || null,
+          wants_delivery: p.wantsDelivery ?? false,
+          delivery_consent_at: p.wantsDelivery ? p.deliveryConsentAt || null : null,
+          delivery_address: p.wantsDelivery ? p.deliveryAddress || null : null,
+          delivery_landmark: p.wantsDelivery ? p.deliveryLandmark || null : null,
           active: p.active,
           notes: p.notes || null,
           registered_at: p.registeredAt,

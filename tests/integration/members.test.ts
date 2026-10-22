@@ -164,6 +164,74 @@ describe("members on the device", () => {
   });
 });
 
+describe("home delivery address", () => {
+  it("is kept only while the member wants deliveries, and syncs to other devices", async () => {
+    const cloud = new FakeCloud();
+    const owner = await device("owner");
+    const at = new Date("2026-10-22T02:00:00Z");
+    await expect(
+      registerMember({ ...maria, wantsDelivery: true, deliveryAddress: " " }, "Ana", owner),
+    ).rejects.toBeInstanceOf(ZodError);
+    const m = await registerMember(
+      {
+        ...maria,
+        wantsDelivery: true,
+        deliveryAddress: "12 Mabini St, Brgy San Isidro, Quezon City",
+        deliveryLandmark: "green gate",
+      },
+      "Ana",
+      owner,
+      at,
+    );
+    expect(m).toMatchObject({
+      wantsDelivery: true,
+      deliveryConsentAt: at.toISOString(),
+      deliveryLandmark: "green gate",
+    });
+
+    await runSync(cloud.api(), owner);
+    const counter = await device("cashier");
+    await runSync(cloud.api(), counter);
+    expect((await counter.members.get(m.id))?.deliveryAddress).toBe("12 Mabini St, Brgy San Isidro, Quezon City");
+
+    // Unticking delivery removes the address everywhere.
+    const off = await updateMember(
+      m.id,
+      {
+        name: m.name,
+        gender: m.gender,
+        contactNumber: "0917 123 4567",
+        marketingConsent: true,
+        wantsDelivery: false,
+        deliveryAddress: "12 Mabini St",
+        notes: "",
+        active: true,
+      },
+      "Ana",
+      counter,
+    );
+    expect(off.wantsDelivery).toBe(false);
+    expect(off.deliveryAddress).toBeUndefined();
+    expect(off.deliveryLandmark).toBeUndefined();
+    await runSync(cloud.api(), counter);
+    await runSync(cloud.api(), owner);
+    expect((await owner.members.get(m.id))?.deliveryAddress).toBeUndefined();
+  });
+
+  it("keeps the local address when the cloud has not been updated yet", async () => {
+    const cloud = new FakeCloud();
+    const db = await device();
+    const m = await registerMember({ ...maria, wantsDelivery: true, deliveryAddress: "12 Mabini St" }, "Ana", db);
+    await runSync(cloud.api(), db);
+    // Simulate a cloud before migration 7: the feed has no delivery fields.
+    const row = cloud.customers.get(m.id)!;
+    for (const k of ["wants_delivery", "delivery_consent_at", "delivery_address", "delivery_landmark"]) delete row[k];
+    row.updated_at = new Date(Date.now() + 1000).toISOString();
+    await runSync(cloud.api(), db);
+    expect((await db.members.get(m.id))?.deliveryAddress).toBe("12 Mabini St");
+  });
+});
+
 describe("members and programs sync", () => {
   it("sends members and programs before the sale, and other devices download them", async () => {
     const cloud = new FakeCloud();

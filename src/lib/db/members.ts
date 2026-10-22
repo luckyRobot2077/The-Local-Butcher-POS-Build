@@ -33,6 +33,10 @@ export const memberInputSchema = z
     /** The member agreed to the store keeping their details. Required to register. */
     privacyConsent: z.literal(true, { message: "The customer must agree before they can be registered" }),
     marketingConsent: z.boolean(),
+    /** Optional: the member wants home deliveries and agrees to the store keeping their address. */
+    wantsDelivery: z.boolean().default(false),
+    deliveryAddress: z.string().trim().max(300).default(""),
+    deliveryLandmark: z.string().trim().max(150).default(""),
     notes: z.string().trim().max(200),
   })
   .superRefine((v, ctx) => {
@@ -42,8 +46,32 @@ export const memberInputSchema = z
     if (v.marketingConsent && !v.contactNumber) {
       ctx.addIssue({ code: "custom", path: ["contactNumber"], message: "Promo messages need a mobile number" });
     }
+    if (v.wantsDelivery && !v.deliveryAddress) {
+      ctx.addIssue({ code: "custom", path: ["deliveryAddress"], message: "Enter the delivery address" });
+    }
   });
 export type MemberInput = z.input<typeof memberInputSchema>;
+
+/** The address is kept only while the member wants deliveries; turning it off removes it. */
+function deliveryFields(
+  d: { wantsDelivery: boolean; deliveryAddress: string; deliveryLandmark: string },
+  consentAt: string,
+): Pick<Member, "wantsDelivery" | "deliveryConsentAt" | "deliveryAddress" | "deliveryLandmark"> {
+  if (!d.wantsDelivery) {
+    return {
+      wantsDelivery: false,
+      deliveryConsentAt: undefined,
+      deliveryAddress: undefined,
+      deliveryLandmark: undefined,
+    };
+  }
+  return {
+    wantsDelivery: true,
+    deliveryConsentAt: consentAt,
+    deliveryAddress: d.deliveryAddress,
+    deliveryLandmark: d.deliveryLandmark || undefined,
+  };
+}
 
 function enqueue(db: PosDatabase, entityId: string) {
   return db.outbox.add({
@@ -80,6 +108,7 @@ export async function registerMember(input: MemberInput, by: string, db = getDb(
       privacyConsentAt: at,
       marketingConsent: data.marketingConsent,
       marketingConsentAt: data.marketingConsent ? at : undefined,
+      ...deliveryFields(data, at),
       active: true,
       notes: data.notes || undefined,
       registeredAt: at,
@@ -102,6 +131,10 @@ export const memberEditSchema = z
     gender: z.enum(genderIds),
     contactNumber: z.string().trim().max(20),
     marketingConsent: z.boolean(),
+    /** Optional: the member wants home deliveries and agrees to the store keeping their address. */
+    wantsDelivery: z.boolean().default(false),
+    deliveryAddress: z.string().trim().max(300).default(""),
+    deliveryLandmark: z.string().trim().max(150).default(""),
     notes: z.string().trim().max(200),
     active: z.boolean(),
   })
@@ -111,6 +144,9 @@ export const memberEditSchema = z
     }
     if (v.marketingConsent && !v.contactNumber) {
       ctx.addIssue({ code: "custom", path: ["contactNumber"], message: "Promo messages need a mobile number" });
+    }
+    if (v.wantsDelivery && !v.deliveryAddress) {
+      ctx.addIssue({ code: "custom", path: ["deliveryAddress"], message: "Enter the delivery address" });
     }
   });
 export type MemberEdit = z.input<typeof memberEditSchema>;
@@ -123,6 +159,7 @@ export async function updateMember(id: string, edit: MemberEdit, by: string, db 
     if (!cur) throw new MemberError("Member not found on this device.");
     const at = now.toISOString();
     const consentChanged = data.marketingConsent !== cur.marketingConsent;
+    const deliveryChanged = data.wantsDelivery !== !!cur.wantsDelivery;
     const next: Member = {
       ...cur,
       name: data.name,
@@ -131,6 +168,7 @@ export async function updateMember(id: string, edit: MemberEdit, by: string, db 
       contactNumber: data.contactNumber ? normalizePhMobile(data.contactNumber)! : undefined,
       marketingConsent: data.marketingConsent,
       marketingConsentAt: consentChanged ? at : cur.marketingConsentAt,
+      ...deliveryFields(data, deliveryChanged ? at : (cur.deliveryConsentAt ?? at)),
       notes: data.notes || undefined,
       active: data.active,
       updatedAt: at,
@@ -144,7 +182,13 @@ export async function updateMember(id: string, edit: MemberEdit, by: string, db 
       entityId: id,
       by,
       at,
-      detail: consentChanged ? { marketingConsent: data.marketingConsent } : undefined,
+      detail:
+        consentChanged || deliveryChanged
+          ? {
+              ...(consentChanged ? { marketingConsent: data.marketingConsent } : {}),
+              ...(deliveryChanged ? { wantsDelivery: data.wantsDelivery } : {}),
+            }
+          : undefined,
     });
     return next;
   });

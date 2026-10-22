@@ -477,6 +477,10 @@ export function memberPayload(m: Member) {
     privacyConsentAt: m.privacyConsentAt,
     marketingConsent: m.marketingConsent,
     marketingConsentAt: m.marketingConsentAt ?? "",
+    wantsDelivery: !!m.wantsDelivery,
+    deliveryConsentAt: m.deliveryConsentAt ?? "",
+    deliveryAddress: m.deliveryAddress ?? "",
+    deliveryLandmark: m.deliveryLandmark ?? "",
     active: m.active,
     notes: m.notes ?? "",
     registeredAt: m.registeredAt,
@@ -990,6 +994,11 @@ interface MembersFeed {
     privacy_consent_at: string;
     marketing_consent: boolean;
     marketing_consent_at: string | null;
+    /** Missing until migration 7 is run. */
+    wants_delivery?: boolean;
+    delivery_consent_at?: string | null;
+    delivery_address?: string | null;
+    delivery_landmark?: string | null;
     active: boolean;
     notes: string | null;
     registered_at: string;
@@ -1040,6 +1049,11 @@ async function pullMembersFeed(api: CloudApi, db: PosDatabase, report: SyncRepor
         privacyConsentAt: c.privacy_consent_at,
         marketingConsent: c.marketing_consent,
         marketingConsentAt: c.marketing_consent_at ?? undefined,
+        wantsDelivery: c.wants_delivery ?? local?.wantsDelivery,
+        deliveryConsentAt:
+          c.wants_delivery === undefined ? local?.deliveryConsentAt : (c.delivery_consent_at ?? undefined),
+        deliveryAddress: c.wants_delivery === undefined ? local?.deliveryAddress : (c.delivery_address ?? undefined),
+        deliveryLandmark: c.wants_delivery === undefined ? local?.deliveryLandmark : (c.delivery_landmark ?? undefined),
         active: c.active,
         notes: c.notes ?? undefined,
         registeredAt: c.registered_at,

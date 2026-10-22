@@ -184,8 +184,8 @@ end $$;
 
 reset role;
 do $$ begin
-  if (select value from schema_info where key = 'schema_version') <> '20261024000006' then
+  if (select value from schema_info where key = 'schema_version') < '20261024000006' then
     raise exception 'FAIL: schema version';
   end if;
-  raise notice 'ok: schema version 20261024000006';
+  raise notice 'ok: schema version is 20261024000006 or later';
 end $$;
