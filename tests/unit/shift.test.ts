@@ -117,6 +117,7 @@ describe("Back Office shifts CSV", () => {
     expect(lines).toHaveLength(5);
     expect(lines[0]).toContain('"Event"');
     expect(lines[3]).toContain('"Sale paid"');
+    expect(lines[2]).toMatch(/^"Oct 22, 2026, 09:58:30\sAM"/); // Manila time to the second
     expect(lines[3]).toContain('"324.00"');
     expect(lines[4]).toContain('"Shift closed"');
     expect(lines[4]).toContain('"-4"');
