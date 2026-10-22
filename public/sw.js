@@ -12,7 +12,7 @@
  *    pages keep working while an update rolls out.
  *  - PAGES_CACHE: HTML for the app routes, refreshed on every online visit.
  */
-const VERSION = "v4";
+const VERSION = "v5";
 const STATIC_CACHE = "tlb-static";
 const PAGES_CACHE = `tlb-pages-${VERSION}`;
 const APP_ROUTES = ["/pos", "/pos/products", "/pos/members", "/pos/inventory", "/pos/history", "/pos/device", "/office", "/"];
@@ -107,7 +107,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return; // always live
-  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/") || url.pathname.startsWith("/brand/")) {
+  if (/^\/(_next\/static|icons|brand|product-art)\//.test(url.pathname)) {
     event.respondWith(cacheFirst(request));
     return;
   }

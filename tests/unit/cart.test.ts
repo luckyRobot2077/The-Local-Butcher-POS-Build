@@ -172,3 +172,45 @@ describe("checkout", () => {
     ).toThrow(CheckoutError);
   });
 });
+
+describe("sold by peso amount", () => {
+  it("charges exactly the amount typed and works out the weight to cut", async () => {
+    const { gramsForAmount } = await import("@/domain/pricing");
+    const { renderReceipt } = await import("@/domain/receipt");
+    // ₱100 of ₱350/kg liempo: 285.7 g, so cut about 286 g, charge ₱100.00 (not ₱99.75 or ₱100.10).
+    expect(gramsForAmount(35000, 10000)).toBe(286);
+    expect(gramsForAmount(35000, 0)).toBeNull();
+    const cart = addLine(emptyCart(), { ...belly(286), fixedAmount: 10000 });
+    const t = priceCart(cart);
+    expect(t.lines[0].gross).toBe(10000);
+    expect(t.total).toBe(10000);
+    // With a 10% item discount it is 10% of ₱100.
+    const disc = updateLine(cart, "l1", {
+      discount: { input: { kind: "percent", basisPoints: 1000 }, source: "manual" },
+    });
+    expect(priceCart(disc).total).toBe(9000);
+    // Changing it to a typed weight goes back to price × weight.
+    expect(priceCart(updateLine(cart, "l1", { qty: 500, fixedAmount: undefined })).total).toBe(17500);
+
+    let n = 0;
+    const sale = buildSale({
+      totals: t,
+      payment: { method: "cash", tendered: 10000 },
+      saleId: "sale-1",
+      receiptNo: "A1B2-000001",
+      storeId: "store",
+      deviceId: "dev",
+      cashierName: "Ana",
+      now: new Date("2026-10-22T02:00:00Z"),
+      newId: () => `id-${++n}`,
+    });
+    expect(sale.items[0].gross).toBe(10000);
+    const lines = renderReceipt({
+      header: { storeName: "The Local Butcher", businessLines: [], footer: "" },
+      sale: sale.sale,
+      items: sale.items,
+      payment: sale.payment,
+    });
+    expect(lines.join("\n")).toMatch(/~0\.286 kg @ ₱350\.00\/kg +₱100\.00/);
+  });
+});

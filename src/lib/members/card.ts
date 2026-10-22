@@ -15,6 +15,56 @@ export interface CardData {
   name: string;
   storeName: string;
   tagline?: string;
+  /** Printed under the QR code with small icons; empty ones are left off. */
+  socials?: { facebook?: string; tiktok?: string; whatsapp?: string };
+}
+
+type Social = "facebook" | "tiktok" | "whatsapp";
+
+/** Small round icon for a social account, drawn with shapes so it looks the same on every device. */
+function drawSocialIcon(ctx: CanvasRenderingContext2D, kind: Social, x: number, y: number, size: number) {
+  const r = size / 2;
+  const cx = x + r;
+  const cy = y + r;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = kind === "facebook" ? "#1877f2" : kind === "tiktok" ? "#000000" : "#25d366";
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#ffffff";
+  if (kind === "facebook") {
+    ctx.font = `bold ${Math.round(size * 0.78)}px ${SANS}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("f", cx + size * 0.04, y + size * 0.86);
+  } else if (kind === "tiktok") {
+    // A music note: stem, flag and note head.
+    ctx.lineWidth = size * 0.11;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(cx + size * 0.04, cy + size * 0.18);
+    ctx.lineTo(cx + size * 0.04, cy - size * 0.28);
+    ctx.quadraticCurveTo(cx + size * 0.1, cy - size * 0.1, cx + size * 0.28, cy - size * 0.12);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx - size * 0.08, cy + size * 0.18, size * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // A speech bubble with a handset inside.
+    ctx.lineWidth = size * 0.08;
+    ctx.beginPath();
+    ctx.arc(cx, cy - size * 0.02, size * 0.3, Math.PI * 0.75, Math.PI * 2.6);
+    ctx.lineTo(cx - size * 0.3, cy + size * 0.3);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.lineWidth = size * 0.1;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(cx, cy - size * 0.02, size * 0.13, Math.PI * 0.6, Math.PI * 1.4);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
@@ -75,9 +125,14 @@ export async function renderMemberCard(d: CardData): Promise<string> {
   }
 
   // QR code on the right, with a quiet zone so phone cameras read it easily.
-  const qrSize = 400;
-  const qrX = CARD_WIDTH_PX - qrSize - 40;
-  const qrY = Math.round((bandY - qrSize) / 2);
+  // It is a little smaller when social accounts are listed under it.
+  const socials = (["facebook", "tiktok", "whatsapp"] as const)
+    .map((kind) => ({ kind, text: d.socials?.[kind]?.trim() ?? "" }))
+    .filter((x) => x.text);
+  const rowH = 44;
+  const qrSize = socials.length ? Math.min(400, bandY - 40 - socials.length * rowH - 14) : 400;
+  const qrX = CARD_WIDTH_PX - 400 - 40 + Math.round((400 - qrSize) / 2);
+  const qrY = socials.length ? 22 : Math.round((bandY - qrSize) / 2);
   const qrCanvas = document.createElement("canvas");
   await QRCode.toCanvas(qrCanvas, memberQrPayload(d.memberId), {
     errorCorrectionLevel: "M",
@@ -86,6 +141,17 @@ export async function renderMemberCard(d: CardData): Promise<string> {
     color: { dark: "#000000", light: "#ffffff" },
   });
   ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+
+  const colX = CARD_WIDTH_PX - 400 - 40;
+  socials.forEach((sc, i) => {
+    const y = qrY + qrSize + 8 + i * rowH;
+    drawSocialIcon(ctx, sc.kind, colX + 16, y + 4, 34);
+    ctx.fillStyle = NAVY;
+    fitText(ctx, sc.text, 400 - 70, 28, "600");
+    ctx.textBaseline = "middle";
+    ctx.fillText(sc.text, colX + 62, y + 22);
+    ctx.textBaseline = "alphabetic";
+  });
 
   // Member name and number on the left, under the logo.
   const leftW = qrX - 80;

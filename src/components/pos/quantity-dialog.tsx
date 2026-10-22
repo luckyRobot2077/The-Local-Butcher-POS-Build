@@ -3,21 +3,22 @@
 import { useState } from "react";
 import { formatPeso, parsePeso } from "@/domain/money";
 import { formatQuantity, parsePieces, parseWeight, unitLabel, type SaleUnit } from "@/domain/quantity";
-import { lineGross } from "@/domain/pricing";
+import { gramsForAmount, lineGross } from "@/domain/pricing";
 import { Button, ErrorText, Modal, inputClass } from "@/components/ui";
 
 type Mode = "kg" | "g" | "peso";
 
 /**
  * Weight or piece entry. For per-kg items the cashier can type kilograms,
- * grams, or a peso amount ("₱100 worth"), which is converted to the most
- * grams that do not exceed the amount.
+ * grams, or a peso amount ("₱100 worth"). A peso amount is charged exactly
+ * as typed; the dialog shows the weight to cut for it.
  */
 export function QuantityDialog({
   title,
   saleUnit,
   unitPrice,
   initialQty,
+  initialAmount,
   confirmLabel,
   onConfirm,
   onClose,
@@ -27,29 +28,31 @@ export function QuantityDialog({
   saleUnit: SaleUnit;
   unitPrice: number;
   initialQty?: number;
+  /** The line was sold by peso amount; the dialog opens on that amount. */
+  initialAmount?: number;
   confirmLabel: string;
-  onConfirm: (qty: number) => void;
+  /** `fixedAmount` is set when sold by peso amount. */
+  onConfirm: (qty: number, fixedAmount?: number) => void;
   onClose: () => void;
   onRemove?: () => void;
 }) {
-  const [mode, setMode] = useState<Mode>("kg");
+  const [mode, setMode] = useState<Mode>(initialAmount !== undefined && saleUnit === "kg" ? "peso" : "kg");
   const [text, setText] = useState(() => {
+    if (initialAmount !== undefined && saleUnit === "kg") return (initialAmount / 100).toString();
     if (!initialQty) return saleUnit === "piece" ? "1" : "";
     return saleUnit === "piece" ? String(initialQty) : (initialQty / 1000).toString();
   });
 
   let qty: number | null = null;
+  let fixedAmount: number | undefined;
   if (saleUnit === "piece") qty = parsePieces(text);
   else if (mode === "peso") {
-    const amount = parsePeso(text);
-    if (amount && unitPrice > 0) {
-      let g = Math.floor((amount * 1000) / unitPrice);
-      while (g > 0 && lineGross("kg", unitPrice, g) > amount) g -= 1;
-      qty = g > 0 ? g : null;
-    }
+    const typed = parsePeso(text);
+    qty = typed ? gramsForAmount(unitPrice, typed) : null;
+    if (qty) fixedAmount = typed!;
   } else qty = parseWeight(text, mode);
 
-  const amount = qty ? lineGross(saleUnit, unitPrice, qty) : null;
+  const amount = qty ? (fixedAmount ?? lineGross(saleUnit, unitPrice, qty)) : null;
   const invalid = text.trim() !== "" && qty === null;
 
   const quick =
@@ -61,7 +64,7 @@ export function QuantityDialog({
           ? ["250", "500", "750", "1000"]
           : ["100", "200", "500", "1000"];
 
-  const confirm = () => qty && onConfirm(qty);
+  const confirm = () => qty && onConfirm(qty, fixedAmount);
 
   return (
     <Modal
@@ -155,7 +158,9 @@ export function QuantityDialog({
           </ErrorText>
         )}
         <div className="flex items-baseline justify-between rounded-xl bg-white px-3 py-2">
-          <span className="text-sm text-charcoal-700">{qty ? formatQuantity(saleUnit, qty) : "—"}</span>
+          <span className="text-sm text-charcoal-700" data-testid="qty-weight">
+            {qty ? `${fixedAmount !== undefined ? "Cut about " : ""}${formatQuantity(saleUnit, qty)}` : "—"}
+          </span>
           <span className="text-2xl font-bold text-burgundy-800" data-testid="qty-amount">
             {amount !== null ? formatPeso(amount) : "₱0.00"}
           </span>

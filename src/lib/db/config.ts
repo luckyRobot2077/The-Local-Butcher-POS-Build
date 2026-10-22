@@ -12,6 +12,12 @@ export const settingsSchema = z.object({
   /** Highest manual discount a cashier may give without the manager PIN, in basis points. */
   cashierDiscountLimitBp: z.number().int().min(0).max(10_000),
   allowItemAndOrderStacking: z.boolean(),
+  /** Social accounts printed under the QR code on member cards. Empty ones are left off. */
+  socials: z.object({
+    facebook: z.string().trim().max(60),
+    tiktok: z.string().trim().max(60),
+    whatsapp: z.string().trim().max(30),
+  }),
   /** Lets cashiers change product photos and descriptions without the manager PIN. */
   cashierCanEditPhotos: z.boolean(),
   /** Thresholds for movement classification, alerts and order estimates (spec 11). */
@@ -40,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   receiptFooter: "Salamat po! Please come again.",
   cashierDiscountLimitBp: 1000,
   allowItemAndOrderStacking: false,
+  socials: { facebook: "", tiktok: "", whatsapp: "" },
   cashierCanEditPhotos: false,
   inventoryRules: DEFAULT_INVENTORY_RULES,
 };
@@ -67,6 +74,7 @@ export async function getSettings(db = getDb()): Promise<Settings> {
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
+    socials: { ...DEFAULT_SETTINGS.socials, ...stored?.socials },
     inventoryRules: { ...DEFAULT_INVENTORY_RULES, ...stored?.inventoryRules },
   };
 }

@@ -8,7 +8,22 @@ import { formatQuantity } from "@/domain/quantity";
 import { listCategories } from "@/lib/db/products";
 import { Badge, Button } from "@/components/ui";
 import { usePos } from "../pos-context";
-import { CLASS_LABEL, CLASS_TONE, formatDays, formatPct, formatVelocity, useInventory } from "./use-inventory";
+import {
+  ALL_HISTORY,
+  CLASS_LABEL,
+  CLASS_TONE,
+  formatDays,
+  formatPct,
+  formatVelocity,
+  useInventory,
+} from "./use-inventory";
+
+const PERIODS = [
+  { days: 7, label: "Last 7 days" },
+  { days: 30, label: "Last 30 days" },
+  { days: 365, label: "Last year" },
+  { days: ALL_HISTORY, label: "All history" },
+];
 
 type SortKey = "velocity" | "coverage" | "sellThrough" | "profit" | "name";
 
@@ -93,7 +108,7 @@ export function MovementTab() {
     const blob = new Blob([[header.join(","), ...lines].join("\r\n")], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `product-movement-${view!.today}-${period}d.csv`;
+    a.download = `product-movement-${view!.today}-${period === ALL_HISTORY ? "all" : `${period}d`}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -101,9 +116,15 @@ export function MovementTab() {
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        {[7, 30].map((d) => (
-          <Button key={d} size="sm" variant={period === d ? "primary" : "secondary"} onClick={() => setPeriod(d)}>
-            Last {d} days
+        {PERIODS.map((p) => (
+          <Button
+            key={p.days}
+            size="sm"
+            variant={period === p.days ? "primary" : "secondary"}
+            onClick={() => setPeriod(p.days)}
+            data-testid={`period-${p.days || "all"}`}
+          >
+            {p.label}
           </Button>
         ))}
         <label className="ml-2 text-sm">
@@ -128,7 +149,8 @@ export function MovementTab() {
         Sales per day counts only days the product was in stock, so running out does not make it look slow. Fast, normal
         and slow compare products in the same category and unit; groups with fewer than {rules.minGroupSize} products
         are not ranked. Revenue {formatPeso(totals.revenue)}, cost of goods {formatPeso(totals.cogs)}, gross profit{" "}
-        {formatPeso(totals.revenue - totals.cogs)} for the period.
+        {formatPeso(totals.revenue - totals.cogs)} from {view.periodStart} to {view.today} ({view.periodDays}{" "}
+        {view.periodDays === 1 ? "day" : "days"}).
       </p>
       <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
         <table className="w-full min-w-[56rem] text-sm" data-testid="movement-table">

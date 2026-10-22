@@ -21,13 +21,14 @@ export function MemberCard({ member }: { member: Member }) {
       name: member.name,
       storeName: settings.storeName,
       tagline: settings.tagline,
+      socials: settings.socials,
     })
       .then((url) => !cancelled && setSrc(url))
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       cancelled = true;
     };
-  }, [member.id, member.memberNo, member.name, settings.storeName, settings.tagline]);
+  }, [member.id, member.memberNo, member.name, settings.storeName, settings.tagline, settings.socials]);
 
   function print() {
     if (!src) return;

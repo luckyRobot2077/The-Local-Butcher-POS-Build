@@ -3,7 +3,9 @@
 import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  addDays,
   buildAlerts,
+  daysBetween,
   computeMetrics,
   estimateBatches,
   estimateOrder,
@@ -17,12 +19,24 @@ import type { SaleUnit } from "@/domain/quantity";
 import { businessDate } from "@/domain/time";
 import { batchRefs, loadInventoryData } from "@/lib/db/inventory";
 
-/** Live inventory analytics for this device's data, recomputed when the ledger changes. */
-export function useInventory(rules: InventoryRules) {
+/** Period length for "all history": from the first stock entry on this device to today. */
+export const ALL_HISTORY = 0;
+
+/**
+ * Live inventory analytics for this device's data, recomputed when the
+ * ledger changes. A `periodDays` of ALL_HISTORY covers everything recorded.
+ */
+export function useInventory(periodRules: InventoryRules) {
   const data = useLiveQuery(() => loadInventoryData(), []);
   return useMemo(() => {
     if (!data) return undefined;
     const today = businessDate(new Date());
+    let rules = periodRules;
+    if (periodRules.periodDays === ALL_HISTORY) {
+      const first = data.ledger.reduce((m, e) => (e.at < m ? e.at : m), new Date().toISOString());
+      const firstDay = businessDate(new Date(first));
+      rules = { ...periodRules, periodDays: Math.max(1, daysBetween(firstDay, today) + 1) };
+    }
     const metrics = computeMetrics({
       products: data.products,
       ledger: data.ledger,
@@ -63,8 +77,10 @@ export function useInventory(rules: InventoryRules) {
       orders,
       alerts,
       lastRestock: data.lastRestock,
+      periodDays: rules.periodDays,
+      periodStart: addDays(today, -(rules.periodDays - 1)),
     };
-  }, [data, rules]);
+  }, [data, periodRules]);
 }
 
 export type InventoryView = NonNullable<ReturnType<typeof useInventory>>;
