@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 — 2026-10-23 — Cashier shifts and audit history
+
+### Added
+- Shifts. Before the first sale the cashier starts a shift with the cash in the drawer; selling
+  waits for it. The "Shift" button on the sell screen shows the sales so far and closes the shift:
+  count the drawer, and the app shows the expected cash (starting cash + cash sales) and whether it
+  is over or short. The next shift starts before more sales.
+- Every sale keeps when it started (first item in) as well as when it was paid, and its shift.
+- "Open drawer (no sale)": a reason and an owner or manager approval (badge + authenticator code,
+  or the manager PIN), logged with the time and names. The drawer itself does not open from the
+  app yet: that needs a receipt printer with a drawer port (later).
+- History → Shifts on each device: every shift with its timeline (start, each sale started and
+  paid, no-sale openings, close with the count).
+- Back Office → Shifts: shifts from every device for a date range, with the same timeline, the
+  over/short and a CSV with one row per time stamp.
+- Supabase migration 11 (`20261029000011_shifts.sql`), safe to run twice. Until it is run, the
+  device lists the shift as a sync problem ("the cloud database needs an update"); sales still sync.
+
 ## 0.6.1 — 2026-10-23 — Tablet keypad and sell-screen numpad
 
 ### Added

@@ -147,3 +147,22 @@ changed signatures, re-grants).
   `discount_approved_by`.
 - `member_visits()`: sales per member, for the visit number at the counter (any staff).
 
+
+### `20261029000011_shifts.sql`
+
+Safe to run more than once (`add column if not exists`, `create table if not exists`,
+`create or replace`, re-grants).
+
+- `cashier_shifts` (from migration 1, unused until now) gains `opened_by_name`, `opened_by_employee`,
+  `closed_by_name`, `cash_sales`, `gcash_sales`, `sale_count`, `note`, `received_at`, `updated_at`.
+- `drawer_events`: the drawer opened without a sale (`kind = 'no_sale'`), with time, who, who
+  approved and the reason. RLS on with no policies: reached only through functions.
+- `sales.started_at`: when the first item went into the cart (`created_at` stays the payment time).
+  `sales.shift_id` (from migration 1) is now filled.
+- `sync_shift(p jsonb)`: called when a shift opens and again when it closes; the opening is written
+  once and the closing details once (a later different close is ignored).
+- `sync_drawer_event(p jsonb)`: idempotent by id; the shift must already be in the cloud.
+- `sync_sale` also stores `startedAt` and links `shiftId` only if that shift reached the cloud, so a
+  sale is never refused because of its shift. Payloads of older sales are unchanged.
+- `office_shifts(p_from, p_to, token)`: shifts opened in the date range (Manila) with their sales
+  (start and payment times) and drawer openings; open shifts total the sales synced so far.

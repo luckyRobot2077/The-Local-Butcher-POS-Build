@@ -200,7 +200,9 @@ export type OutboxKind =
   | "purchase"
   | "purchase_payment"
   | "customer"
-  | "promotion";
+  | "promotion"
+  | "shift"
+  | "drawer_event";
 
 export interface OutboxEntry {
   id: string;

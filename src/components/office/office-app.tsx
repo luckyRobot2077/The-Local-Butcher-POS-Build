@@ -32,6 +32,7 @@ import {
 } from "@/domain/office";
 import { ColumnChart, Legend, RankedBars, SERIES, ShareBar, TrendChart } from "./charts";
 import { SetupWizard, StaffPage, UnlockScreen, withSession, type OfficeSession } from "./staff";
+import { ShiftsPage } from "./shifts";
 
 const OTHER_PART = "#a7afb8";
 
@@ -80,7 +81,7 @@ function download(name: string, csv: string) {
 
 export function OfficeApp() {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
-  const [tab, setTab] = useState<"reports" | "staff">("reports");
+  const [tab, setTab] = useState<"reports" | "shifts" | "staff">("reports");
 
   const openWith = useCallback((base: CloudApi, store: string, session: OfficeSession) => {
     saveSession(session);
@@ -194,6 +195,7 @@ export function OfficeApp() {
             {(
               [
                 ["reports", "Reports"],
+                ["shifts", "Shifts"],
                 ["staff", "Staff"],
               ] as const
             ).map(([id, label]) => (
@@ -245,6 +247,7 @@ export function OfficeApp() {
           <UnlockScreen api={gate.api} onUnlocked={(sess) => openWith(gate.api, gate.store, sess)} />
         )}
         {gate.kind === "open" && tab === "reports" && <Dashboard key={gate.session.token} api={gate.api} />}
+        {gate.kind === "open" && tab === "shifts" && <ShiftsPage api={gate.api} onCsv={download} />}
         {gate.kind === "open" && tab === "staff" && (
           <StaffPage api={gate.api} storeName={gate.store} session={gate.session} />
         )}

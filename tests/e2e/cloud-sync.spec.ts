@@ -92,6 +92,8 @@ test("sign in, register the device and sync a sale exactly once", async ({ page 
           sales.set(payload.sale.id, key);
           return json(200, prev ? "duplicate" : "inserted");
         }
+        case "sync_shift":
+          return json(200, "inserted");
         case "store_stock":
           return json(200, []);
         case "inventory_feed":
@@ -151,6 +153,15 @@ test("sign in, register the device and sync a sale exactly once", async ({ page 
   expect(rpcCalls.filter((c) => c.fn === "sync_sale")).toHaveLength(1);
   expect(rpcCalls.filter((c) => c.fn === "sync_product")).toHaveLength(16);
   expect(sales.size).toBe(1);
+  // The sale carries its shift and when it started; the shift went first.
+  const shiftCall = rpcCalls.findIndex((c) => c.fn === "sync_shift");
+  expect(shiftCall).toBeGreaterThanOrEqual(0);
+  expect(shiftCall).toBeLessThan(rpcCalls.findIndex((c) => c.fn === "sync_sale"));
+  const sent = JSON.parse([...sales.values()][0]) as {
+    sale: { shiftId?: string; startedAt?: string; createdAt: string };
+  };
+  expect(sent.sale.shiftId).toBeTruthy();
+  expect(sent.sale.startedAt! <= sent.sale.createdAt).toBe(true);
   // The cashier shown on sales is now the signed-in staff member.
   await expect(page.getByTestId("cashier-chip")).toContainText("Josh");
 });

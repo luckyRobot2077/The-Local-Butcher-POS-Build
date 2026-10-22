@@ -1,6 +1,7 @@
 import type { PaymentRecord, SaleItemRecord, SaleRecord } from "@/domain/checkout";
 import type { AppliedDiscountInput } from "@/domain/cart";
 import type { DiscountProgram } from "@/domain/programs";
+import type { Shift } from "@/domain/shift";
 import type { Gender } from "@/domain/members";
 import { getDb, type PosDatabase } from "@/lib/db/db";
 import { nowIso } from "@/lib/db/ids";
@@ -26,8 +27,8 @@ import { getCloudIdentity, getSyncMeta, patchSyncMeta } from "./identity";
  *
  * Order matters because of foreign keys on the server:
  *   categories → products → photos → suppliers → purchases → payment
- *   status → stock movements → members → discount programs → sales →
- *   pull → members feed → inventory feed.
+ *   status → stock movements → members → discount programs → shifts →
+ *   sales → drawer openings → pull → members feed → inventory feed.
  *
  * Outcomes per outbox entry:
  *   - accepted or already there (idempotent) → status "sent"
@@ -47,6 +48,7 @@ export interface SyncReport {
   purchases: number;
   members: number;
   programs: number;
+  shifts: number;
   failed: number;
   conflicts: number;
   pulledProducts: number;
@@ -111,6 +113,7 @@ async function doSync(api: CloudApi, db: PosDatabase): Promise<SyncReport> {
     purchases: 0,
     members: 0,
     programs: 0,
+    shifts: 0,
     failed: 0,
     conflicts: 0,
     pulledProducts: 0,
@@ -127,7 +130,9 @@ async function doSync(api: CloudApi, db: PosDatabase): Promise<SyncReport> {
     await pushMovements(api, db, device.deviceId, report);
     await pushMembers(api, db, report);
     await pushPrograms(api, db, report);
+    await pushShifts(api, db, report);
     await pushSales(api, db, report);
+    await pushDrawerEvents(api, db, report);
     await pull(api, db, report);
     // Members and programs: a rejection (e.g. the database update not run yet) must not hold up sales.
     try {
@@ -609,6 +614,9 @@ export function salePayload(sale: SaleRecord, items: SaleItemRecord[], payment: 
       discountApprovedBy: sale.discountApprovedBy ?? null,
       // Only present on member sales, so sales made before Phase 4 keep the same payload.
       ...(sale.customerId ? { customerId: sale.customerId } : {}),
+      // Likewise only on sales made since shifts (0.7.0).
+      ...(sale.startedAt ? { startedAt: sale.startedAt } : {}),
+      ...(sale.shiftId ? { shiftId: sale.shiftId } : {}),
     },
     items: items
       .slice()
@@ -661,6 +669,68 @@ async function pushSales(api: CloudApi, db: PosDatabase, report: SyncReport) {
       await mark(db, [entry], "sent");
     });
     report.sales++;
+  }
+}
+
+/** The shift as it stands; sent again when it closes (the server only adds the closing details). */
+export function shiftPayload(sh: Shift) {
+  return {
+    id: sh.id,
+    deviceId: sh.deviceId,
+    openedAt: sh.openedAt,
+    openedBy: sh.openedBy,
+    openedByEmployeeId: sh.openedByEmployeeId ?? null,
+    openingFloat: sh.openingFloat,
+    closedAt: sh.closedAt ?? null,
+    closedBy: sh.closedBy ?? null,
+    countedCash: sh.countedCash ?? null,
+    expectedCash: sh.expectedCash ?? null,
+    cashSales: sh.cashSales ?? null,
+    gcashSales: sh.gcashSales ?? null,
+    saleCount: sh.saleCount ?? null,
+    note: sh.note ?? null,
+  };
+}
+
+async function pushShifts(api: CloudApi, db: PosDatabase, report: SyncReport) {
+  const groups = groupBy(await pendingEntries(db, "shift"), (e) => e.entityId);
+  for (const [shiftId, entries] of groups) {
+    const sh = await db.shifts.get(shiftId);
+    if (!sh) {
+      await mark(db, entries, "sent", "Shift no longer on this device");
+      continue;
+    }
+    const ok = await attempt(db, entries, report, async () => {
+      await api.rpc<string>("sync_shift", { p: shiftPayload(sh) });
+    });
+    if (!ok) continue;
+    await mark(db, entries, "sent");
+    report.shifts++;
+  }
+}
+
+async function pushDrawerEvents(api: CloudApi, db: PosDatabase, report: SyncReport) {
+  for (const entry of await pendingEntries(db, "drawer_event")) {
+    const ev = await db.drawerEvents.get(entry.entityId);
+    if (!ev) {
+      await mark(db, [entry], "sent", "Drawer record no longer on this device");
+      continue;
+    }
+    const ok = await attempt(db, [entry], report, async () => {
+      await api.rpc<string>("sync_drawer_event", {
+        p: {
+          id: ev.id,
+          shiftId: ev.shiftId,
+          deviceId: ev.deviceId,
+          kind: ev.kind,
+          at: ev.at,
+          by: ev.by,
+          approvedBy: ev.approvedBy ?? null,
+          reason: ev.reason,
+        },
+      });
+    });
+    if (ok) await mark(db, [entry], "sent");
   }
 }
 

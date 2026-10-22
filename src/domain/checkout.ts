@@ -67,6 +67,10 @@ export interface SaleRecord {
   customerId?: string;
   /** Member number snapshot, printed on the receipt. */
   memberNo?: string;
+  /** When the first item went into the cart (UTC ISO-8601); createdAt is when it was paid. */
+  startedAt?: string;
+  /** The cashier shift open on this device when the sale was paid. */
+  shiftId?: string;
   itemCount: number;
   syncStatus: SyncStatus;
   receiptPrintCount: number;
@@ -85,6 +89,8 @@ export interface BuildSaleArgs {
   orderDiscountDetail?: AppliedDiscountInput;
   discountApprovedBy?: string;
   member?: { id: string; memberNo: string };
+  startedAt?: string;
+  shiftId?: string;
   saleId: string;
   receiptNo: string;
   storeId: string;
@@ -154,6 +160,8 @@ export function buildSale(a: BuildSaleArgs): { sale: SaleRecord; items: SaleItem
     orderDiscountDetail: a.orderDiscountDetail,
     discountApprovedBy: a.discountApprovedBy,
     ...(a.member ? { customerId: a.member.id, memberNo: a.member.memberNo } : {}),
+    ...(a.startedAt && a.startedAt <= a.now.toISOString() ? { startedAt: a.startedAt } : {}),
+    ...(a.shiftId ? { shiftId: a.shiftId } : {}),
     itemCount: items.length,
     syncStatus: "pending",
     receiptPrintCount: 0,
