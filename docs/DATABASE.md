@@ -105,3 +105,19 @@ Timestamps are `timestamptz` (UTC). `business_date` is the Asia/Manila calendar 
 - `sync_sale` and `sync_purchase` now use `search_path = public, extensions`. Supabase installs pgcrypto
   (`digest`) in the `extensions` schema, so before this every sale and purchase upload failed with
   "function digest(text, unknown) does not exist". The migration tests now install pgcrypto the same way.
+
+### `20261027000009_back_office.sql`
+
+Safe to run more than once (every statement is `create or replace` or a re-grant).
+
+- `office_report(p_from date, p_to date) → jsonb`: everything the Back Office dashboard shows for a range
+  of business dates (`p_from` null = from the first sale): totals (sales, transactions, average,
+  discounts, cost of goods, gross profit, expenses, net operating profit), a daily series, sales and
+  cost by category and product, payment method, cashier, hour and weekday (Asia/Manila), discounts by
+  program/reason, expenses, member insights (active, repeat, new, member share, top members, age and
+  gender), inventory (stock value at cost, purchases, waste, low stock) and recent sales.
+  Owner and manager only (`require_manager()`), always limited to the caller's store.
+- `office_sales_lines(p_from, p_to)`: every sale line with cost, for the CSV export (max 50,000 rows).
+- `record_expense(p jsonb) → uuid` (upsert by id, so a retry is harmless) and `delete_expense(id)`;
+  owner/manager only, both written to `audit_logs`.
+- Line cost for kg products is `round(unit_cost × grams / 1000)`.

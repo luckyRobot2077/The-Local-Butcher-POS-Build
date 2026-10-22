@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0 — 2026-10-22 — Back Office reports
+
+### Added
+- Back Office (`/office`): sign in with the owner or manager cloud account to see the whole shop's
+  synced data, for Today, 7 days, 30 days, this month, last month, 1 year, all history or picked dates.
+  - Sales, average sale, discounts, cost of goods, gross profit and margin, expenses and estimated net
+    operating profit.
+  - Charts: sales and gross profit over time (daily, weekly or monthly by range, with a table view),
+    sales by category with margin, best sellers, busy hours, day of the week, cash vs GCash, sales by
+    cashier, discounts given, members vs walk-ins, members by age.
+  - Product profit table, inventory value, supplier purchases, waste and low stock, top members,
+    recent sales.
+  - Expenses: add wages, rent, utilities and other costs; they feed net profit.
+  - CSV downloads: summary, daily sales, product sales, expenses and every sale line.
+- Supabase migration 9 (`20261027000009_back_office.sql`), safe to run twice.
+
 ## 0.4.4 — 2026-10-22 — Sale sync fix
 
 ### Fixed

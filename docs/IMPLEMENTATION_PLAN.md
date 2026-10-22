@@ -101,14 +101,14 @@ member's data on request (switch the membership off for now and ask for removal 
 - No cashier shifts / cash float yet (Phase 5).
 - No refunds of completed sales yet (they will be reversing records with approval).
 - No split payment.
-- Back Office (`/office`) is a status page only.
 - Restoring from a backup file is not implemented (verification only).
 
 ## Next phases
 
 | Phase | Scope | Needs from owner |
 |---|---|---|
-| 5 Back Office & staff (next) | Dashboards (Recharts), reports, expenses, permissions UI, shifts, audit, CSV | — |
+| 5a Back Office reports (done, 0.5.0) | Dashboards (Recharts), sales/profit/inventory/member reports, expenses, CSV | Run migration 9 |
+| 5b Staff (next) | Permissions UI, cashier shifts and cash count, audit history | — |
 | 6 Printer | PT-210 test, BLE/Classic adapter or native bridge | The printer |
 | 7 Backup & recovery | Cloud export, scheduled backups, restore wizard with staging | Off-site storage |
 | 8 Hardening | Real-device, power/network tests, security review, BIR review | BIR details |

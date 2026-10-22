@@ -26,9 +26,9 @@ export default defineConfig({
       name: "tablet",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
       grepInvert: /@phone/,
-      testIgnore: /cloud-sync/,
+      testIgnore: /cloud-/,
     },
-    { name: "phone", use: { ...devices["Pixel 7"] }, grep: /@phone/, testIgnore: /cloud-sync/ },
+    { name: "phone", use: { ...devices["Pixel 7"] }, grep: /@phone/, testIgnore: /cloud-/ },
     {
       name: "cloud",
       use: {
@@ -36,7 +36,7 @@ export default defineConfig({
         viewport: { width: 1280, height: 800 },
         baseURL: `http://localhost:${CLOUD_PORT}`,
       },
-      testMatch: /cloud-sync/,
+      testMatch: /cloud-/,
     },
   ],
   webServer: [
