@@ -36,3 +36,26 @@ export async function setManagerPin(page: Page, pin = "2468") {
   await page.getByLabel("Repeat PIN").fill(pin);
   await page.getByRole("button", { name: "Save PIN" }).click();
 }
+
+/**
+ * Notes the page each print sends to its hidden frame in body[data-printed].
+ * Headless Chrome finishes "printing" at once and the frame is removed, so
+ * it is recorded as it is added.
+ */
+export async function capturePrintFrame(page: Page) {
+  await page.evaluate(() => {
+    new MutationObserver((records) => {
+      for (const r of records)
+        for (const n of r.addedNodes)
+          if (n instanceof HTMLIFrameElement && "printFrame" in n.dataset)
+            document.body.dataset.printed = n.getAttribute("srcdoc") ?? "";
+    }).observe(document.body, { childList: true });
+  });
+}
+
+/** Page count and first page size (points) of a PDF made by page.pdf(). */
+export function pdfPages(pdf: Buffer) {
+  const text = pdf.toString("latin1");
+  const box = text.match(/\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/)!;
+  return { count: text.match(/\/Type\s*\/Page\b/g)?.length ?? 0, width: Number(box[1]), height: Number(box[2]) };
+}

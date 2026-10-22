@@ -1,20 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --color-burgundy-50: #fbf2f3;
-  --color-burgundy-100: #f5dfe2;
-  --color-burgundy-200: #e9bcc2;
-  --color-burgundy-600: #962838;
-  --color-burgundy-700: #7a1f2b;
-  --color-burgundy-800: #621822;
-  --color-burgundy-900: #4a111a;
-  --color-cream-50: #fffdf9;
-  --color-cream-100: #faf6ef;
-  --color-cream-200: #f1e9dc;
-  --color-cream-300: #e4d8c4;
-  --color-charcoal-500: #5c5a57;
-  --color-charcoal-700: #3a3936;
-  --color-charcoal-900: #22211f;
+  /* Brand colours from The Local Butcher, Argao logo: butcher red, navy, cream. */
+  --color-burgundy-50: #fdf3f2;
+  --color-burgundy-100: #f9e0de;
+  --color-burgundy-200: #f0b9b5;
+  --color-burgundy-600: #a8100d;
+  --color-burgundy-700: #910101;
+  --color-burgundy-800: #750000;
+  --color-burgundy-900: #580000;
+  --color-navy-50: #eef2f6;
+  --color-navy-100: #d6dfe8;
+  --color-navy-600: #1e3d58;
+  --color-navy-700: #14314a;
+  --color-navy-800: #0d263b;
+  --color-navy-900: #091d2d;
+  --color-cream-50: #fffdf8;
+  --color-cream-100: #f9f5ec;
+  --color-cream-200: #efe7d8;
+  --color-cream-300: #e1d4bd;
+  --color-charcoal-500: #56606b;
+  --color-charcoal-700: #2f3a46;
+  --color-charcoal-900: #0f1c28;
   --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "DejaVu Sans Mono", Menlo, Consolas, monospace;
 }
@@ -26,50 +33,4 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Receipt printing: only the receipt is printed, sized for 58 mm paper. */
-@media print {
-  @page {
-    size: 58mm auto;
-    margin: 0;
-  }
-  body * {
-    visibility: hidden;
-  }
-  .print-area,
-  .print-area * {
-    visibility: visible;
-  }
-  .print-area {
-    position: absolute;
-    inset: 0 auto auto 0;
-    width: 58mm;
-    padding: 2mm;
-    font-size: 9pt;
-    line-height: 1.25;
-    background: white;
-    color: black;
-    box-shadow: none !important;
-    border: 0 !important;
-  }
-}
-
-/* Member card printing (see member-card.tsx): ID-card size, only the card. */
-@media print {
-  html.printing-card .print-area {
-    display: none;
-  }
-  html.printing-card .print-card,
-  html.printing-card .print-card * {
-    visibility: visible;
-  }
-  html.printing-card .print-card {
-    position: absolute;
-    inset: 0 auto auto 0;
-    width: 85.6mm;
-    height: 54mm;
-    margin: 0;
-    border: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-  }
-}
+/* Receipts and member cards print from their own page (src/lib/printer/print-frame.ts). */

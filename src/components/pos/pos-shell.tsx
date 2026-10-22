@@ -49,11 +49,17 @@ function Header() {
   const pathname = usePathname();
   const { settings, cashierName, changeCashier, managerUnlocked, lockManager } = usePos();
   return (
-    <header className="bg-burgundy-700 text-cream-50 shadow-md">
+    <header className="border-b-4 border-burgundy-700 bg-navy-900 text-cream-50 shadow-md">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-2 pb-1">
         <Link href="/" className="flex items-center gap-2">
-          {/* eslint-disable-next-line @next/next/no-img-element -- static icon, must work offline */}
-          <img src="/icons/icon-192.png" alt="" width={32} height={32} className="rounded-lg" />
+          {/* eslint-disable-next-line @next/next/no-img-element -- static logo, must work offline */}
+          <img
+            src="/brand/logo.jpg"
+            alt=""
+            width={36}
+            height={40}
+            className="h-10 w-9 rounded-md bg-white object-contain p-0.5"
+          />
           <span className="font-bold leading-tight">{settings.storeName}</span>
         </Link>
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -87,7 +93,7 @@ function Header() {
               href={t.href}
               aria-current={active ? "page" : undefined}
               className={`rounded-t-lg px-4 py-2 text-sm font-semibold ${
-                active ? "bg-cream-100 text-burgundy-800" : "text-cream-100 hover:bg-burgundy-800"
+                active ? "bg-burgundy-700 text-cream-50" : "text-cream-100 hover:bg-navy-700"
               }`}
             >
               {t.label}

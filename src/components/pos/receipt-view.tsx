@@ -36,12 +36,17 @@ export function ReceiptView({ saleId }: { saleId: string }) {
 
   return (
     <div className="grid gap-3">
-      <pre
-        className="print-area mx-auto w-fit overflow-x-auto rounded-lg border border-cream-300 bg-white p-3 font-mono text-[12px] leading-snug text-black shadow-inner"
-        data-testid="receipt-preview"
-      >
-        {lines.join("\n")}
-      </pre>
+      <div className="mx-auto w-fit overflow-x-auto rounded-lg border border-cream-300 bg-white p-3 font-mono text-[12px] leading-snug text-black shadow-inner">
+        {/* eslint-disable-next-line @next/next/no-img-element -- static logo, must work offline */}
+        <img
+          src="/brand/logo-receipt.png"
+          alt=""
+          width={144}
+          height={161}
+          className="mx-auto mb-2 block w-36 grayscale"
+        />
+        <pre data-testid="receipt-preview">{lines.join("\n")}</pre>
+      </div>
       <ErrorText>{error}</ErrorText>
       <Button variant="secondary" onClick={print} data-testid="print-receipt">
         {detail.sale.receiptPrintCount > 0 ? "Reprint receipt" : "Print receipt"}

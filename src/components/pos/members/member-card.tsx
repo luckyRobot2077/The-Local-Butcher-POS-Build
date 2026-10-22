@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { renderMemberCard } from "@/lib/members/card";
+import { printMemberCard } from "@/lib/members/card-print";
 import type { Member } from "@/lib/db/types";
 import { Button, ErrorText } from "@/components/ui";
 import { usePos } from "../pos-context";
@@ -29,23 +30,9 @@ export function MemberCard({ member }: { member: Member }) {
   }, [member.id, member.memberNo, member.name, settings.storeName, settings.tagline]);
 
   function print() {
-    // Card-size page just for this print, then back to the 58 mm receipt layout.
-    const style = document.createElement("style");
-    style.textContent = "@page { size: 85.6mm 54mm; margin: 0; }";
-    document.head.appendChild(style);
-    document.documentElement.classList.add("printing-card");
-    const cleanup = () => {
-      style.remove();
-      document.documentElement.classList.remove("printing-card");
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("afterprint", cleanup);
-    try {
-      window.print();
-    } catch {
-      cleanup();
-      setError("Printing failed. Save the card image and print it instead.");
-    }
+    if (!src) return;
+    setError(undefined);
+    printMemberCard(src).catch(() => setError("Printing failed. Save the card image and print it instead."));
   }
 
   return (
@@ -55,7 +42,7 @@ export function MemberCard({ member }: { member: Member }) {
         <img
           src={src}
           alt={`Member card for ${member.name}, ${member.memberNo}`}
-          className="print-card mx-auto w-full max-w-sm rounded-xl border border-cream-300 shadow"
+          className="mx-auto w-full max-w-sm rounded-xl border border-cream-300 shadow"
           data-testid="member-card"
         />
       ) : (
