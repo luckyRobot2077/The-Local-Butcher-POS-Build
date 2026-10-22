@@ -1,3 +1,8 @@
+-- Like Supabase, pgcrypto lives in the "extensions" schema, not "public", so
+-- functions with search_path = public cannot see digest() unless they say so.
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+
 -- Minimal stand-in for the parts of Supabase that the migrations use, so
 -- they can be tested on plain PostgreSQL. Not used in production.
 -- Roles are cluster-wide, so only create them once.

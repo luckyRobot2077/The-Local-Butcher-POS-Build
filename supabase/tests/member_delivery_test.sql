@@ -67,8 +67,8 @@ exception when check_violation then raise notice 'ok: no address stored without 
 end $$;
 
 do $$ begin
-  if (select value from schema_info where key = 'schema_version') <> '20261025000007' then
+  if (select value from schema_info where key = 'schema_version') < '20261025000007' then
     raise exception 'FAIL: schema version';
   end if;
-  raise notice 'ok: schema version 20261025000007';
+  raise notice 'ok: schema version at least 20261025000007';
 end $$;

@@ -99,3 +99,9 @@ Timestamps are `timestamptz` (UTC). `business_date` is the Asia/Manila calendar 
 - `sync_customer` and `members_feed` replaced to carry these fields. A payload without `wantsDelivery`
   (older app) leaves them unchanged; turning delivery off clears the address.
 
+
+### `20261026000008_sync_digest_fix.sql`
+
+- `sync_sale` and `sync_purchase` now use `search_path = public, extensions`. Supabase installs pgcrypto
+  (`digest`) in the `extensions` schema, so before this every sale and purchase upload failed with
+  "function digest(text, unknown) does not exist". The migration tests now install pgcrypto the same way.
