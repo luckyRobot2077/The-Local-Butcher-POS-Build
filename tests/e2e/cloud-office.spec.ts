@@ -1,10 +1,10 @@
-import { expect, test, type Route } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { fakeSupabase, whoami } from "./fake-supabase";
 
 /**
  * Back Office against a fake Supabase (request interception). The report SQL
  * itself is tested on PostgreSQL in supabase/tests/back_office_test.sql.
  */
-const userId = "00000000-0000-0000-0000-0000000000a1";
 
 function addDays(date: string, n: number) {
   const d = new Date(`${date}T00:00:00Z`);
@@ -191,109 +191,95 @@ function fakeReport(
   };
 }
 
-test("owner signs in to the Back Office, sees charts, adds an expense and downloads CSV", async ({ page }) => {
+const SESSION = {
+  token: "session-token",
+  employeeId: "50000000-0000-0000-0000-000000000001",
+  employeeNo: "E-0001",
+  name: "Josh",
+  role: "owner",
+  expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+};
+
+async function signIn(page: Page, email = "owner@example.test") {
+  await page.goto("/office");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("correct-horse");
+  await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+async function unlock(page: Page, badge: string, code: string) {
+  await expect(page.getByTestId("office-unlock")).toBeVisible();
+  await page.getByTestId("badge-input").fill(badge);
+  await page.getByTestId("badge-input").press("Enter");
+  await page.getByTestId("office-code").fill(code);
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+}
+
+test("Back Office opens with a badge and authenticator code; charts, expenses and CSV", async ({ page }) => {
   const calls: { fn: string; body: Record<string, unknown> }[] = [];
   const expenses: { id: string; category: string; amount: number; spentOn: string; note: string | null }[] = [];
+  const withToken = (body: Record<string, unknown>, ok: () => unknown) =>
+    body.p_token === SESSION.token
+      ? ok()
+      : { status: 403, body: { code: "42501", message: "the Back Office is locked: scan your badge" } };
 
-  await page.route("http://supabase.fake.test/**", async (route: Route) => {
-    const req = route.request();
-    const url = new URL(req.url());
-    const json = (status: number, body: unknown) =>
-      route.fulfill({
-        status,
-        contentType: "application/json",
-        headers: { "access-control-allow-origin": "*" },
-        body: JSON.stringify(body),
-      });
-    if (req.method() === "OPTIONS") {
-      return route.fulfill({
-        status: 200,
-        headers: {
-          "access-control-allow-origin": "*",
-          "access-control-allow-headers": "*",
-          "access-control-allow-methods": "*",
-        },
-      });
-    }
-    if (url.pathname === "/auth/v1/token") {
-      const { email } = req.postDataJSON();
-      const now = Math.floor(Date.now() / 1000);
-      return json(200, {
-        access_token: "fake-access-token",
-        token_type: "bearer",
-        expires_in: 3600,
-        expires_at: now + 3600,
-        refresh_token: "fake-refresh",
-        user: {
-          id: userId,
-          aud: "authenticated",
-          role: "authenticated",
-          email,
-          app_metadata: {},
-          user_metadata: {},
-          created_at: new Date().toISOString(),
-        },
-      });
-    }
-    if (url.pathname.startsWith("/rest/v1/rpc/")) {
-      const fn = url.pathname.split("/").pop()!;
-      const body = req.postDataJSON() ?? {};
-      calls.push({ fn, body });
-      switch (fn) {
-        case "whoami":
-          return json(200, [
-            {
-              user_id: userId,
-              store_id: "s",
-              store_name: "The Local Butcher",
-              display_name: "Josh",
-              role: "owner",
-              has_store: true,
-            },
-          ]);
-        case "office_report":
-          return json(200, fakeReport(body.p_from as string | null, body.p_to as string, expenses));
-        case "record_expense": {
-          const p = body.p as { id: string; category: string; amount: number; spentOn: string; note: string };
+  await fakeSupabase(
+    page,
+    {
+      whoami: whoami("owner"),
+      office_status: () => ({ setupOpen: false, accountRole: "owner", employees: 2 }),
+      office_unlock: (b) =>
+        b.p_badge === "TLB-STAFF:owner" && b.p_code === "123456"
+          ? SESSION
+          : { error: "Wrong or used code. Wait for a new code in the authenticator app and try again." },
+      office_lock: () => null,
+      office_report: (b) => withToken(b, () => fakeReport(b.p_from as string | null, b.p_to as string, expenses)),
+      record_expense: (b) =>
+        withToken(b, () => {
+          const p = b.p as { id: string; category: string; amount: number; spentOn: string; note: string };
           const i = expenses.findIndex((e) => e.id === p.id);
           const row = { id: p.id, category: p.category, amount: p.amount, spentOn: p.spentOn, note: p.note || null };
           if (i >= 0) expenses[i] = row;
           else expenses.push(row);
-          return json(200, p.id);
-        }
-        case "office_sales_lines":
-          return json(200, [
-            {
-              business_date: body.p_to,
-              created_at: `${body.p_to}T02:00:00+00:00`,
-              receipt_no: "AB12-000001",
-              cashier: "Ana",
-              payment_method: "cash",
-              member_no: null,
-              product: "Liempo",
-              category: "Pork",
-              unit: "kg",
-              qty: 1000,
-              unit_price: 36000,
-              gross: 36000,
-              discount: 0,
-              net: 36000,
-              cost: 29500,
-            },
-          ]);
-      }
-      return json(404, { code: "PGRST202", message: `no function ${fn}` });
-    }
-    return json(404, { message: "not faked" });
-  });
+          return p.id;
+        }),
+      office_sales_lines: (b) =>
+        withToken(b, () => [
+          {
+            business_date: b.p_to,
+            created_at: `${b.p_to}T02:00:00+00:00`,
+            receipt_no: "AB12-000001",
+            cashier: "Ana",
+            payment_method: "cash",
+            member_no: "M-AB12-0001",
+            product: "Liempo",
+            category: "Pork",
+            unit: "kg",
+            qty: 1000,
+            unit_price: 36000,
+            gross: 36000,
+            discount: 3600,
+            net: 32400,
+            cost: 29500,
+            item_discount: 0,
+            order_discount_share: 3600,
+            discount_names: "Suki 10% (whole sale)",
+            discount_approved_by: "Josh",
+          },
+        ]),
+    },
+    calls,
+  );
 
-  await page.goto("/office");
-  await page.getByLabel("Email").fill("owner@example.test");
-  await page.getByLabel("Password").fill("correct-horse");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signIn(page);
+  await unlock(page, "TLB-STAFF:owner", "000000");
+  await expect(page.getByText("Wrong or used code")).toBeVisible();
+  await page.getByTestId("office-code").fill("123456");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
 
   await expect(page.getByTestId("office-report")).toBeVisible();
-  expect(calls.find((c) => c.fn === "office_report")?.body.p_from).toBeTruthy();
+  await expect(page.getByTestId("office-who")).toContainText("Josh (owner, E-0001)");
+  expect(calls.find((c) => c.fn === "office_report")?.body).toMatchObject({ p_token: SESSION.token });
   await expect(page.getByTestId("kpi-sales")).toContainText("₱");
   await expect(page.getByTestId("chart-trend").locator(".recharts-line")).toHaveCount(2);
   await expect(page.getByTestId("by-hour").locator(".recharts-bar-rectangle").first()).toBeVisible();
@@ -315,60 +301,125 @@ test("owner signs in to the Back Office, sees charts, adds an expense and downlo
   await expect.poll(() => calls.filter((c) => c.fn === "office_report").at(-1)?.body.p_from).toBeNull();
   await page.getByTestId("range-year").click();
   await expect(page.getByText("trend grouped by week", { exact: false })).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath("office-year.png"), fullPage: true });
 
   const download = page.waitForEvent("download");
   await page.getByTestId("csv-lines").click();
   const file = await download;
   expect(file.suggestedFilename()).toMatch(/^sale-lines_.*\.csv$/);
-  const text = await (await file.createReadStream()).toArray();
-  expect(Buffer.concat(text).toString()).toContain('"Liempo","Pork","kg","1.000","360.00"');
+  const text = Buffer.concat(await (await file.createReadStream()).toArray()).toString();
+  expect(text).toContain('"Discount given"');
+  expect(text).toContain('"36.00","Suki 10% (whole sale)","0.00","36.00","Josh","324.00"');
+
+  // A reload keeps the session for this tab; Lock ends it.
+  await page.reload();
+  await expect(page.getByTestId("office-report")).toBeVisible();
+  await page.getByTestId("office-lock").click();
+  await expect(page.getByTestId("office-unlock")).toBeVisible();
+  expect(calls.some((c) => c.fn === "office_lock")).toBe(true);
 });
 
-test("cashiers are told the Back Office is for owners and managers", async ({ page }) => {
-  await page.route("http://supabase.fake.test/**", async (route: Route) => {
-    const req = route.request();
-    const url = new URL(req.url());
-    const headers = {
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "*",
-      "access-control-allow-methods": "*",
-    };
-    if (req.method() === "OPTIONS") return route.fulfill({ status: 200, headers });
-    const now = Math.floor(Date.now() / 1000);
-    const body =
-      url.pathname === "/auth/v1/token"
-        ? {
-            access_token: "t",
-            token_type: "bearer",
-            expires_in: 3600,
-            expires_at: now + 3600,
-            refresh_token: "r",
-            user: {
-              id: userId,
-              aud: "authenticated",
-              role: "authenticated",
-              email: "ana@example.test",
-              app_metadata: {},
-              user_metadata: {},
-              created_at: new Date().toISOString(),
-            },
-          }
-        : [
-            {
-              user_id: userId,
-              store_id: "s",
-              store_name: "The Local Butcher",
-              display_name: "Ana",
-              role: "cashier",
-              has_store: true,
-            },
-          ];
-    return route.fulfill({ status: 200, contentType: "application/json", headers, body: JSON.stringify(body) });
+test("first-time setup: owner ID, badge, Google Authenticator, then the Staff page", async ({ page }) => {
+  const calls: { fn: string; body: Record<string, unknown> }[] = [];
+  let setupOpen = true;
+  const staff: Record<string, unknown>[] = [];
+  await fakeSupabase(
+    page,
+    {
+      whoami: whoami("owner"),
+      office_status: () => ({ setupOpen, accountRole: "owner", employees: staff.length }),
+      save_employee: (b) => {
+        const p = b.p as Record<string, unknown>;
+        const no = `E-000${staff.length + 1}`;
+        staff.push({
+          id: p.id,
+          employeeNo: no,
+          name: p.name,
+          role: p.role,
+          active: true,
+          hasPin: !!p.pin,
+          authenticator: false,
+        });
+        return { id: p.id, employeeNo: no };
+      },
+      confirm_totp: (b) => {
+        if (b.p_code !== "654321") return false;
+        setupOpen = false;
+        const e = staff.find((x) => x.id === b.p_employee);
+        if (e) e.authenticator = true;
+        return true;
+      },
+      office_unlock: (b) => (b.p_code === "111111" ? SESSION : { error: "Wrong or used code." }),
+      office_report: () => fakeReport(null, new Date().toISOString().slice(0, 10), []),
+      office_employees: () => staff,
+    },
+    calls,
+  );
+
+  await signIn(page);
+  await expect(page.getByTestId("office-setup")).toBeVisible();
+  await page.getByLabel("New PIN").fill("2468");
+  await page.getByLabel("Repeat PIN").fill("2468");
+  await page.getByRole("button", { name: "Create my owner ID" }).click();
+
+  await expect(page.getByTestId("badge-panel")).toBeVisible();
+  const save = calls.find((c) => c.fn === "save_employee")!.body;
+  const p = save.p as {
+    role: string;
+    badgeHash: string;
+    totpSecret: string;
+    pin: { hash: string; iterations: number };
+  };
+  expect(save.p_token).toBeNull();
+  expect(p.role).toBe("owner");
+  expect(p.badgeHash).toMatch(/^[0-9a-f]{64}$/);
+  expect(p.totpSecret).toMatch(/^[A-Z2-7]{32}$/);
+  expect(p.pin.iterations).toBe(210000);
+  expect(JSON.stringify(save)).not.toContain("2468");
+  expect(JSON.stringify(save)).not.toContain("TLB-STAFF:");
+
+  await expect(page.getByTestId("badge-panel").getByRole("img")).toBeVisible();
+  await page.getByTestId("office-setup").screenshot({ path: test.info().outputPath("setup-badge.png") });
+  await page.getByTestId("setup-next").click();
+  await expect(page.getByTestId("totp-secret")).toHaveText(p.totpSecret.match(/.{1,4}/g)!.join(" "));
+  await page.getByTestId("totp-confirm-code").fill("000000");
+  await page.getByRole("button", { name: "Link the app" }).click();
+  await expect(page.getByText("That code did not match")).toBeVisible();
+  await page.getByTestId("totp-confirm-code").fill("654321");
+  await page.getByRole("button", { name: "Link the app" }).click();
+  await page.getByTestId("setup-open-code").fill("111111");
+  await page.getByRole("button", { name: "Open the Back Office" }).click();
+  await expect(page.getByTestId("office-report")).toBeVisible();
+  const unlockCall = calls.find((c) => c.fn === "office_unlock")!.body;
+  expect(String(unlockCall.p_badge)).toMatch(/^TLB-STAFF:[0-9a-f]{32}$/);
+
+  // Staff page: add a cashier with a PIN; the badge is shown for printing.
+  await page.getByTestId("office-tab-staff").click();
+  await expect(page.getByTestId("employee-list")).toContainText("E-0001");
+  await page.getByTestId("add-employee").click();
+  await page.getByLabel("Employee name").fill("Ana Reyes");
+  await page.getByLabel("New PIN").fill("1357");
+  await page.getByLabel("Repeat PIN").fill("1357");
+  await page.getByRole("button", { name: "Create and make badge" }).click();
+  await expect(page.getByTestId("badge-panel")).toBeVisible();
+  const add = calls.filter((c) => c.fn === "save_employee").at(-1)!.body;
+  expect(add).toMatchObject({ p_token: SESSION.token, p: { name: "Ana Reyes", role: "cashier" } });
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("employee-list")).toContainText("Ana Reyes");
+});
+
+test("a cashier badge cannot open the Back Office", async ({ page }) => {
+  await fakeSupabase(page, {
+    whoami: whoami("cashier"),
+    office_status: () => ({ setupOpen: false, accountRole: "cashier", employees: 3 }),
+    office_unlock: () => ({ error: "Only owner and manager badges open the Back Office." }),
   });
-  await page.goto("/office");
-  await page.getByLabel("Email").fill("ana@example.test");
-  await page.getByLabel("Password").fill("pw");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("Ana, the Back Office is for owner and manager accounts.")).toBeVisible();
+  await signIn(page, "ana@example.test");
+  await unlock(page, "TLB-STAFF:ana", "123456");
+  await expect(page.getByText("Only owner and manager badges open the Back Office.")).toBeVisible();
+});
+
+test("the Back Office asks for the database update when migration 10 is missing", async ({ page }) => {
+  await fakeSupabase(page, { whoami: whoami("owner") });
+  await signIn(page);
+  await expect(page.getByText("The cloud database needs an update")).toBeVisible();
 });

@@ -4,6 +4,8 @@ import type { DiscountProgram } from "@/domain/programs";
 import type { Gender } from "@/domain/members";
 import { getDb, type PosDatabase } from "@/lib/db/db";
 import { nowIso } from "@/lib/db/ids";
+import { MEMBER_VISITS_KEY, type ServerVisitCounts } from "@/lib/db/members";
+import { setEmployees, type LocalEmployee } from "@/lib/staff/employees";
 import type {
   InventoryBatch,
   InventoryMovement,
@@ -131,6 +133,14 @@ async function doSync(api: CloudApi, db: PosDatabase): Promise<SyncReport> {
     try {
       await pullMembersFeed(api, db, report);
       await patchSyncMeta({ membersFeedError: undefined }, db);
+    } catch (e) {
+      if (!(e instanceof CloudRejection)) throw e;
+      await patchSyncMeta({ membersFeedError: e.message }, db);
+    }
+    // Visit counts and staff badges for the counter; an older database without them keeps what the device has.
+    try {
+      await pullMemberVisits(api, db);
+      await pullEmployees(api, db);
     } catch (e) {
       if (!(e instanceof CloudRejection)) throw e;
       await patchSyncMeta({ membersFeedError: e.message }, db);
@@ -1026,6 +1036,46 @@ interface MembersFeed {
 }
 
 /** Downloads members and discount programs saved on other devices (every staff role). */
+interface ServerEmployee {
+  id: string;
+  employee_no: string;
+  name: string;
+  role: LocalEmployee["role"];
+  active: boolean;
+  badge_hash: string;
+  pin_salt: string | null;
+  pin_hash: string | null;
+  pin_iterations: number | null;
+  totp_secret: string | null;
+}
+
+async function pullEmployees(api: CloudApi, db: PosDatabase) {
+  const feed = await api.rpc<{ employees: ServerEmployee[] }>("employees_feed", {});
+  await setEmployees(
+    feed.employees.map((e) => ({
+      id: e.id,
+      employeeNo: e.employee_no,
+      name: e.name,
+      role: e.role,
+      active: e.active,
+      badgeHash: e.badge_hash,
+      pin:
+        e.pin_salt && e.pin_hash && e.pin_iterations
+          ? { salt: e.pin_salt, hash: e.pin_hash, iterations: Number(e.pin_iterations) }
+          : undefined,
+      totpSecret: e.totp_secret ?? undefined,
+    })),
+    db,
+  );
+}
+
+async function pullMemberVisits(api: CloudApi, db: PosDatabase) {
+  const rows = await api.rpc<{ customer_id: string; visits: number; last_at: string }[]>("member_visits", {});
+  const counts: ServerVisitCounts["counts"] = {};
+  for (const r of rows) counts[r.customer_id] = { visits: Number(r.visits), lastAt: r.last_at };
+  await db.config.put({ key: MEMBER_VISITS_KEY, value: { at: nowIso(), counts } satisfies ServerVisitCounts });
+}
+
 async function pullMembersFeed(api: CloudApi, db: PosDatabase, report: SyncReport) {
   const { membersCursor } = await getSyncMeta(db);
   const since = membersCursor ? new Date(Date.parse(membersCursor) - FEED_OVERLAP_MS).toISOString() : null;

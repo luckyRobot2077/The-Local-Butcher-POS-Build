@@ -121,3 +121,29 @@ Safe to run more than once (every statement is `create or replace` or a re-grant
 - `record_expense(p jsonb) → uuid` (upsert by id, so a retry is harmless) and `delete_expense(id)`;
   owner/manager only, both written to `audit_logs`.
 - Line cost for kg products is `round(unit_cost × grams / 1000)`.
+
+### `20261028000010_staff_ids_and_visits.sql`
+
+Safe to run more than once (`create table if not exists`, `create or replace`, drops before re-creating
+changed signatures, re-grants).
+
+- `employees`: employee number per store, name, role, active, `badge_hash` (SHA-256 of the badge QR
+  text), device-made PBKDF2 PIN hash, authenticator (TOTP) secret with `totp_confirmed_at` and
+  `totp_last_step` (stops a code being used twice). RLS on with no policies: reached only through
+  functions.
+- `office_sessions`: SHA-256 of a random Back Office token, employee, expiry (12 hours).
+- `totp_code(secret, step)` (RFC 6238, checked against its test vectors), `totp_accept`,
+  `base32_decode`, `staff_setup_open`, `require_office(token)`: internal, not callable over the API.
+- `office_status()`, `office_unlock(badge, code)` (8 wrong tries per store in 10 minutes → wait),
+  `office_lock(token)`.
+- `save_employee(p, token)` and `confirm_totp(employee, code, token)`: owner session only, except
+  while setup is open (no owner with a linked app yet), when the signed-in owner account may create
+  and link the first owner ID without a session. The shop always keeps one owner.
+- `office_employees(token)` (list, no secrets) and `employees_feed()` (for devices: badge and PIN
+  hashes, linked owner/manager secrets).
+- `office_report`, `office_sales_lines`, `record_expense`, `delete_expense` now take the session token
+  as their last argument; the migration 9 versions without it are dropped.
+- `office_sales_lines` adds `item_discount`, `order_discount_share`, `discount_names`,
+  `discount_approved_by`.
+- `member_visits()`: sales per member, for the visit number at the counter (any staff).
+

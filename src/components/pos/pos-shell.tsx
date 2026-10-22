@@ -47,7 +47,7 @@ function Gate({ children }: { children: ReactNode }) {
 
 function Header() {
   const pathname = usePathname();
-  const { settings, cashierName, changeCashier, managerUnlocked, lockManager } = usePos();
+  const { settings, cashierName, changeCashier, managerUnlocked, lockManager, employee, badgeSignIn } = usePos();
   return (
     <header className="border-b-4 border-burgundy-700 bg-navy-900 text-cream-50 shadow-md">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-2 pb-1">
@@ -79,8 +79,9 @@ function Header() {
             onClick={changeCashier}
             className="rounded-full bg-cream-50/15 px-3 py-1 text-xs font-semibold hover:bg-cream-50/25"
             data-testid="cashier-chip"
+            title={badgeSignIn ? "Sign out so the next employee can scan their badge" : "Change the cashier name"}
           >
-            Cashier: {cashierName || "—"}
+            {badgeSignIn ? (employee ? `${employee.name} · Sign out` : "Signed out") : `Cashier: ${cashierName || "—"}`}
           </button>
         </div>
       </div>

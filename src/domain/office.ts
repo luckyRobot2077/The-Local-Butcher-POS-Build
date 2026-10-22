@@ -328,6 +328,11 @@ export interface SaleLineRow {
   discount: Centavos;
   net: Centavos;
   cost: Centavos;
+  /** From migration 10 on: the line's own discount, its share of a whole-sale discount, and their names. */
+  item_discount?: Centavos;
+  order_discount_share?: Centavos;
+  discount_names?: string | null;
+  discount_approved_by?: string | null;
 }
 
 export function saleLinesCsv(rows: SaleLineRow[]): string {
@@ -346,6 +351,10 @@ export function saleLinesCsv(rows: SaleLineRow[]): string {
       "Unit price (PHP)",
       "Gross (PHP)",
       "Discount (PHP)",
+      "Discount given",
+      "Item discount (PHP)",
+      "Share of whole-sale discount (PHP)",
+      "Discount approved by",
       "Net (PHP)",
       "Cost (PHP)",
       "Profit (PHP)",
@@ -364,6 +373,10 @@ export function saleLinesCsv(rows: SaleLineRow[]): string {
       csvPeso(l.unit_price),
       csvPeso(l.gross),
       csvPeso(l.discount),
+      l.discount_names ?? "",
+      l.item_discount == null ? "" : csvPeso(l.item_discount),
+      l.order_discount_share == null ? "" : csvPeso(l.order_discount_share),
+      l.discount_approved_by ?? "",
       csvPeso(l.net),
       csvPeso(l.cost),
       csvPeso(l.net - l.cost),

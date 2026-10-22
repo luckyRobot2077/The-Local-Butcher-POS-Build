@@ -259,6 +259,41 @@ export async function memberHistory(memberId: string, db = getDb()) {
   };
 }
 
+/** Config key for the per-member sale counts last downloaded from the cloud. */
+export const MEMBER_VISITS_KEY = "memberVisits";
+export interface ServerVisitCounts {
+  at: string;
+  counts: Record<string, { visits: number; lastAt: string }>;
+}
+
+/**
+ * How many times the member has bought, across all devices: the cloud count
+ * plus this device's sales not uploaded yet, or what this device has seen
+ * itself if that is more (e.g. never synced).
+ */
+export async function memberVisitSummary(memberId: string, db = getDb()): Promise<{ visits: number; lastAt?: string }> {
+  const [history, server, unsent] = await Promise.all([
+    memberHistory(memberId, db),
+    db.config.get(MEMBER_VISITS_KEY),
+    db.outbox
+      .where("kind")
+      .equals("sale")
+      .filter((e) => e.status !== "sent")
+      .toArray(),
+  ]);
+  const row = (server?.value as ServerVisitCounts | undefined)?.counts[memberId];
+  let fromServer = 0;
+  let lastAt = row?.lastAt;
+  if (row) {
+    const unsentIds = new Set(unsent.map((e) => e.entityId));
+    const pending = (await db.sales.where("customerId").equals(memberId).toArray()).filter((s) => unsentIds.has(s.id));
+    fromServer = row.visits + pending.length;
+    for (const p of pending) if (!lastAt || p.createdAt > lastAt) lastAt = p.createdAt;
+  }
+  if (history.visits.length >= fromServer) return { visits: history.visits.length, lastAt: history.lastVisit };
+  return { visits: fromServer, lastAt };
+}
+
 /** Sales since `sinceIso` from this device and others, for member insights. */
 export async function saleFacts(sinceIso: string, db = getDb()): Promise<SaleFact[]> {
   const [local, remote] = await Promise.all([

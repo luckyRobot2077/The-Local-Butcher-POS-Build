@@ -100,10 +100,38 @@ describe("CSV files", () => {
         discount: 0,
         net: 45000,
         cost: 36875,
+        item_discount: 0,
+        order_discount_share: 0,
+        discount_names: null,
+        discount_approved_by: null,
+      },
+      {
+        business_date: "2026-10-22",
+        created_at: "2026-10-22T02:05:00+00:00",
+        receipt_no: "AB12-000002",
+        cashier: "Ana",
+        payment_method: "cash",
+        member_no: "M-AB12-0001",
+        product: "Vinegar",
+        category: "Condiments",
+        unit: "piece",
+        qty: 2,
+        unit_price: 5000,
+        gross: 10000,
+        discount: 1900,
+        net: 8100,
+        cost: 6000,
+        item_discount: 1000,
+        order_discount_share: 900,
+        discount_names: "Dented bottle ₱10.00; Suki 10% (whole sale)",
+        discount_approved_by: "Josh",
       },
     ]);
     const row = csv.split("\r\n")[1];
-    expect(row).toContain('"1.250","360.00","450.00","0.00","450.00","368.75","81.25"');
+    expect(row).toContain('"1.250","360.00","450.00","0.00","","0.00","0.00","","450.00","368.75","81.25"');
+    expect(csv.split("\r\n")[2]).toContain(
+      '"19.00","Dented bottle ₱10.00; Suki 10% (whole sale)","10.00","9.00","Josh","81.00"',
+    );
     expect(row).toContain("10:00");
   });
 });
