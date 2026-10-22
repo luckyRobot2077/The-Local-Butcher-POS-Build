@@ -4,6 +4,7 @@ import { useState } from "react";
 import { formatPeso, parsePeso } from "@/domain/money";
 import { formatQuantity, parsePieces, parseWeight, unitLabel, type SaleUnit } from "@/domain/quantity";
 import { gramsForAmount, lineGross } from "@/domain/pricing";
+import { Keypad } from "@/components/keypad";
 import { Button, ErrorText, Modal, inputClass } from "@/components/ui";
 
 type Mode = "kg" | "g" | "peso";
@@ -135,7 +136,7 @@ export function QuantityDialog({
           </span>
           <input
             className={`${inputClass} text-2xl font-bold`}
-            inputMode="decimal"
+            inputMode="none"
             autoFocus
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -150,6 +151,7 @@ export function QuantityDialog({
             </Button>
           ))}
         </div>
+        <Keypad value={text} onChange={setText} decimal={saleUnit === "kg" && mode !== "g"} compact />
         {invalid && (
           <ErrorText>
             {saleUnit === "piece"

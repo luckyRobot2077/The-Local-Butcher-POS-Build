@@ -20,14 +20,17 @@ import {
   type CartTotals,
 } from "@/domain/cart";
 import { describeDiscount } from "@/domain/discount";
+import { quickEntryQty, type QuickMode } from "@/domain/quick-entry";
 import { applyProgram, describeProgram, isProgramCurrent } from "@/domain/programs";
 import { businessDate, formatManila } from "@/domain/time";
 import { memberVisitSummary } from "@/lib/db/members";
 import { listPrograms } from "@/lib/db/programs";
 import { Button, ErrorText, Modal } from "@/components/ui";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { usePos } from "./pos-context";
 import { ProductTile } from "./product-tile";
 import { QuantityDialog } from "./quantity-dialog";
+import { QuickEntry } from "./quick-entry";
 import { DiscountDialog } from "./discount-dialog";
 import { CheckoutDialog } from "./checkout-dialog";
 import { ReceiptView } from "./receipt-view";
@@ -71,6 +74,10 @@ export function SellScreen() {
   const [cartOpen, setCartOpen] = useState(false);
   const [discountApprovedBy, setDiscountApprovedBy] = useState<string>();
   const [error, setError] = useState<string>();
+  const [quickText, setQuickText] = useState("");
+  const [quickMode, setQuickMode] = useState<QuickMode>("kg");
+  const [quickMessage, setQuickMessage] = useState<{ tone: "info" | "error"; text: string }>();
+  const landscape = useMediaQuery("(min-width: 1024px)");
 
   useEffect(() => {
     try {
@@ -133,6 +140,37 @@ export function SellScreen() {
     setDialog({ type: "checkout" });
   }
 
+  function addProduct(p: Product, qty: number, fixedAmount?: number) {
+    setCart((c) =>
+      addLine(c, {
+        lineId: crypto.randomUUID(),
+        productId: p.id,
+        productName: p.name,
+        saleUnit: p.saleUnit,
+        unitPrice: p.price,
+        unitCost: p.cost,
+        qty,
+        fixedAmount,
+      }),
+    );
+  }
+
+  /** A number on the sell-screen numpad adds the tapped product straight away; otherwise ask. */
+  function selectProduct(p: Product) {
+    if (!quickText) {
+      setQuickMessage(undefined);
+      return setDialog({ type: "add", product: p });
+    }
+    const r = quickEntryQty(p, quickMode, quickText);
+    if (!r.ok) return setQuickMessage({ tone: "error", text: r.reason });
+    addProduct(p, r.qty, r.fixedAmount);
+    setQuickText("");
+    setQuickMessage({
+      tone: "info",
+      text: `Added ${r.fixedAmount !== undefined ? `${formatPeso(r.fixedAmount)} of ` : `${formatQuantity(p.saleUnit, r.qty)} `}${p.name}`,
+    });
+  }
+
   function resetSale() {
     setCart(emptyCart());
     setDiscountApprovedBy(undefined);
@@ -142,6 +180,20 @@ export function SellScreen() {
   if (products && products.length === 0) {
     return <EmptyCatalog />;
   }
+
+  const quickEntry = (
+    <QuickEntry
+      column={landscape}
+      text={quickText}
+      mode={quickMode}
+      message={quickMessage}
+      onText={(t) => {
+        setQuickText(t);
+        setQuickMessage(undefined);
+      }}
+      onMode={setQuickMode}
+    />
+  );
 
   const editingLine = dialog && "lineId" in dialog ? cart.lines.find((l) => l.lineId === dialog.lineId) : undefined;
   const pricedEditing = editingLine && totals?.lines.find((l) => l.lineId === editingLine.lineId);
@@ -182,20 +234,22 @@ export function SellScreen() {
           {visible.length === 0 ? (
             <p className="p-6 text-center text-charcoal-500">No products match.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
               {visible.map((p) => (
-                <ProductTile key={p.id} product={p} onSelect={() => setDialog({ type: "add", product: p })} />
+                <ProductTile key={p.id} product={p} onSelect={() => selectProduct(p)} />
               ))}
             </div>
           )}
         </div>
       </section>
 
+      {landscape && quickEntry}
+
       {/* Cart: side panel on tablets, bottom sheet on phones */}
       <aside
         className={`${
           cartOpen ? "fixed inset-0 z-30 flex" : "hidden"
-        } flex-col bg-cream-50 md:static md:z-auto md:flex md:w-[22rem] md:border-l md:border-cream-300 lg:w-[26rem]`}
+        } flex-col bg-cream-50 md:static md:z-auto md:flex md:w-[22rem] md:border-l md:border-cream-300 xl:w-[24rem]`}
         aria-label="Current sale"
       >
         <div className="flex items-center justify-between border-b border-cream-200 px-3 py-2">
@@ -269,6 +323,7 @@ export function SellScreen() {
             </li>
           ))}
         </ul>
+        {!landscape && quickEntry}
         <div className="grid gap-2 border-t border-cream-300 bg-white p-3">
           <div className="flex items-center justify-between gap-2 text-sm" data-testid="sale-member">
             {cart.member ? (
@@ -397,19 +452,7 @@ export function SellScreen() {
           confirmLabel="Add to sale"
           onClose={() => setDialog(null)}
           onConfirm={(qty, fixedAmount) => {
-            const p = dialog.product;
-            setCart((c) =>
-              addLine(c, {
-                lineId: crypto.randomUUID(),
-                productId: p.id,
-                productName: p.name,
-                saleUnit: p.saleUnit,
-                unitPrice: p.price,
-                unitCost: p.cost,
-                qty,
-                fixedAmount,
-              }),
-            );
+            addProduct(dialog.product, qty, fixedAmount);
             setDialog(null);
           }}
         />

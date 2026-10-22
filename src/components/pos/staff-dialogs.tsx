@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { Keypad } from "@/components/keypad";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
 import {
   ROLE_LABEL,
@@ -118,7 +119,7 @@ export function StaffSignInDialog({ onSignedIn }: { onSignedIn: (e: LocalEmploye
             <input
               className={inputClass}
               type="password"
-              inputMode="numeric"
+              inputMode="none"
               autoComplete="off"
               autoFocus
               value={pin}
@@ -127,6 +128,7 @@ export function StaffSignInDialog({ onSignedIn }: { onSignedIn: (e: LocalEmploye
               data-testid="staff-pin"
             />
           </Field>
+          <Keypad value={pin} onChange={(v) => setPin(v.replace(/\D/g, "").slice(0, 8))} decimal={false} compact />
           <ErrorText>{error}</ErrorText>
           <div className="flex justify-between gap-2">
             <Button variant="secondary" onClick={() => (setEmployee(undefined), setError(undefined))}>
@@ -211,7 +213,7 @@ export function ApproveWithCodeDialog({
             <Field label="6-digit code from the authenticator app">
               <input
                 className={`${inputClass} font-mono tracking-[0.3em]`}
-                inputMode="numeric"
+                inputMode="none"
                 autoComplete="one-time-code"
                 autoFocus
                 value={code}
@@ -220,6 +222,7 @@ export function ApproveWithCodeDialog({
                 data-testid="approver-code"
               />
             </Field>
+            <Keypad value={code} onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))} decimal={false} compact />
             <ErrorText>{error}</ErrorText>
             <div className="flex justify-between gap-2">
               <Button variant="secondary" onClick={() => (setApprover(undefined), setError(undefined))}>

@@ -11,6 +11,7 @@ import { formatQuantity, unitLabel } from "@/domain/quantity";
 import { businessDate, formatManila } from "@/domain/time";
 import { estimateBatches, WASTE_TYPES } from "@/domain/inventory";
 import { Badge, Button, ErrorText, Modal } from "@/components/ui";
+import { NumberInput } from "@/components/keypad";
 import { usePos } from "./pos-context";
 import { ProductImage, StockBadge } from "./product-tile";
 import { ProductEditor } from "./product-editor";
@@ -270,9 +271,10 @@ function ProductRow({
       <span className="text-xs text-charcoal-500 md:sr-only">{label}</span>
       <span className="flex min-h-10 items-center rounded-lg border border-cream-300 bg-cream-50 px-2 focus-within:border-burgundy-600 focus-within:bg-white">
         <span className="text-charcoal-500">₱</span>
-        <input
+        <NumberInput
+          floating
+          wrapperClassName="min-w-0 flex-1"
           className="w-full min-w-0 bg-transparent px-1 py-1 text-right font-semibold outline-none"
-          inputMode="decimal"
           value={value}
           readOnly={!managerUnlocked}
           aria-label={`${label} of ${p.name}`}

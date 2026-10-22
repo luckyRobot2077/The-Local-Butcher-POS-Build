@@ -5,6 +5,7 @@ import { formatPeso, parsePeso } from "@/domain/money";
 import type { CartTotals, AppliedDiscountInput } from "@/domain/cart";
 import type { PaymentInput } from "@/domain/checkout";
 import { completeSale } from "@/lib/db/sales";
+import { Keypad, NumberInput } from "@/components/keypad";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
 
 function quickCash(total: number): number[] {
@@ -142,7 +143,7 @@ export function CheckoutDialog({
             <Field label="Cash received">
               <input
                 className={`${inputClass} text-2xl font-bold`}
-                inputMode="decimal"
+                inputMode="none"
                 autoFocus
                 value={tenderedText}
                 onChange={(e) => setTenderedText(e.target.value)}
@@ -157,6 +158,7 @@ export function CheckoutDialog({
                 </Button>
               ))}
             </div>
+            <Keypad value={tenderedText} onChange={setTenderedText} compact testId="tendered-keypad" />
             <div className="flex items-baseline justify-between rounded-xl bg-white px-3 py-3">
               <span className="font-semibold text-charcoal-700">Change</span>
               <span className="text-3xl font-bold text-emerald-800" data-testid="change-amount">
@@ -175,9 +177,9 @@ export function CheckoutDialog({
               does not verify it with GCash.
             </p>
             <Field label="GCash reference number (optional)">
-              <input
+              <NumberInput
+                decimal={false}
                 className={inputClass}
-                inputMode="numeric"
                 value={reference}
                 maxLength={40}
                 onChange={(e) => setReference(e.target.value)}

@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db/db";
 import { listSuppliers, receivePurchase } from "@/lib/db/inventory";
 import type { PaymentStatus, Product } from "@/lib/db/types";
 import { Button, ErrorText, Field, inputClass } from "@/components/ui";
+import { NumberInput } from "@/components/keypad";
 import { usePos } from "../pos-context";
 import { SupplierDialog } from "./purchases-tab";
 
@@ -199,17 +200,15 @@ export function ReceiveTab({ onDone }: { onDone: () => void }) {
                   </select>
                 </Field>
                 <Field label={`Quantity (${p?.saleUnit === "piece" ? "pieces" : "kg"})`}>
-                  <input
+                  <NumberInput
                     className={inputClass}
-                    inputMode="decimal"
                     value={l.qtyText}
                     onChange={(e) => patch(l.key, { qtyText: e.target.value })}
                   />
                 </Field>
                 <Field label={`Cost ${p ? unitLabel(p.saleUnit) : ""}`}>
-                  <input
+                  <NumberInput
                     className={inputClass}
-                    inputMode="decimal"
                     value={l.costText}
                     onChange={(e) => patch(l.key, { costText: e.target.value })}
                   />

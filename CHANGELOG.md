@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.1 — 2026-10-23 — Tablet keypad and sell-screen numpad
+
+### Added
+- A numpad that stays on the sell screen on tablets. Pick kg / pcs, grams or ₱ amount, type the
+  number, then tap a product: it goes straight into the sale ("2" then Whole Chicken adds 2 pcs;
+  "₱ 100" then Pork Liver adds ₱100 worth). With nothing typed, tapping a product opens the weight
+  window as before. On a landscape tablet the numpad is its own column between the products and
+  the sale; held upright it sits under the sale. Phones keep the old layout.
+- Big number keys inside the weight, cash received, discount, staff PIN and authenticator code
+  windows, so the tablet's own keyboard no longer pops up over them.
+- Every other number field in the POS (prices, costs, stock counts, manager PIN, inventory rules,
+  program amounts, GCash reference, member age) opens the same number keys right under itself on a
+  touch screen, with a Done key. Text fields (names, search, notes) still use the tablet keyboard,
+  and a physical keyboard or barcode scanner still types into every field.
+
+### Changed
+- Product tiles size themselves to the space left, so the grid stays readable next to the numpad.
+
 ## 0.6.0 — 2026-10-23 — Employee IDs, authenticator codes, member visits
 
 ### Added

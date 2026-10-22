@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db/db";
 import { recordStockMovement } from "@/lib/db/products";
 import type { MovementType, Product } from "@/lib/db/types";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
+import { NumberInput } from "@/components/keypad";
 
 type ManualType = Exclude<MovementType, "sale" | "purchase">;
 
@@ -105,13 +106,7 @@ export function StockDialog({ product, by, onClose }: { product: Product; by: st
           </div>
         )}
         <Field label={`Quantity (${product.saleUnit === "kg" ? "kg, e.g. 2.5" : "pieces"})`}>
-          <input
-            className={inputClass}
-            inputMode="decimal"
-            value={qtyText}
-            onChange={(e) => setQtyText(e.target.value)}
-            autoFocus
-          />
+          <NumberInput className={inputClass} value={qtyText} onChange={(e) => setQtyText(e.target.value)} autoFocus />
         </Field>
         {meta.sign === -1 && (batches?.length ?? 0) > 0 && (
           <Field label="From batch (optional)" hint="Helps track which delivery the loss came from.">
@@ -152,12 +147,7 @@ export function StockDialog({ product, by, onClose }: { product: Product; by: st
               label="Cost per unit for this delivery (optional)"
               hint="Leave blank to use the product's current cost."
             >
-              <input
-                className={inputClass}
-                inputMode="decimal"
-                value={unitCost}
-                onChange={(e) => setUnitCost(e.target.value)}
-              />
+              <NumberInput className={inputClass} value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
             </Field>
           </>
         )}
