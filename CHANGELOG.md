@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.3 — 2026-10-22 — Prices on the product list, starter pictures, socials
+
+### Added
+- Products: selling price and cost are edited right on the list (manager PIN), with each product's
+  margin (% and pesos per kg or piece), a category filter, and a summary of active products, low stock
+  and average margin. The product's own editor no longer has price fields (only when adding a product).
+- Starter pictures: flat illustrations of 16 common cuts, drawn for this app
+  (`scripts/draw-product-art.py`, no outside images). "Add starter pictures" gives each product with no
+  photo the one that fits its name; existing photos are never replaced.
+- Categories Fresh Goods, Condiments and Side Dishes, added on every device at start-up.
+- Inventory → Movement: "Last year" and "All history" periods, with the dates covered.
+- Social media on member cards: Facebook page, TikTok account and WhatsApp number in Device → store
+  settings, printed with small icons under the QR code. Empty ones are left off.
+
+### Fixed
+- Selling by peso amount charged a little less than typed (₱100 of ₱350/kg liempo came to ₱99.75).
+  It now charges exactly the amount and shows the weight to cut (about 0.286 kg); the receipt marks
+  that weight with "~".
+- The "Saved." note in store settings disappeared straight away.
+
 ## 0.4.2 — 2026-10-22 — Brand theme and printing fixes
 
 ### Changed

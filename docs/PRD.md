@@ -28,7 +28,8 @@ the binding owner rules and the business rules as implemented.
   amount rounded to the nearest centavo, with exactly half a centavo rounding up. Example:
   ₱310.75/kg × 0.457 kg = ₱142.01275 → ₱142.01. All other divisions (percent discounts, line cost)
   use the same rule. Code: `src/domain/money.ts` `divRoundHalfUp`.
-- "Peso amount" entry converts ₱X to the largest number of grams whose price does not exceed ₱X.
+- "Peso amount" entry charges exactly ₱X and shows the weight it buys (₱X ÷ price per kg, to the nearest
+  gram) so the cashier knows how much to cut. The receipt marks that weight with "~".
 
 ### Discounts (Phase 1: manual only)
 - Percent (0–100%, stored as basis points; 12.5% = 1250) or fixed amount (cannot exceed what it applies to).

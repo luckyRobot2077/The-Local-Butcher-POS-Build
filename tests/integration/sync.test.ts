@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { PosDatabase } from "@/lib/db/db";
 import { ensureDevice } from "@/lib/db/config";
-import { ensureDefaultCategories, loadSampleCatalog } from "@/lib/db/seed";
+import { DEFAULT_CATEGORIES, ensureDefaultCategories, loadSampleCatalog } from "@/lib/db/seed";
 import { recordStockMovement, setProductImage, updateProduct } from "@/lib/db/products";
 import { completeSale } from "@/lib/db/sales";
 import { priceCart, type CartLine } from "@/domain/cart";
@@ -94,7 +94,14 @@ describe("cloud sync", () => {
     const sale = await sell(db, await product(db, "Liempo (Pork Belly)"), 1250);
 
     const r = await runSync(cloud.api(), db);
-    expect(r).toMatchObject({ categories: 4, products: 16, photos: 1, sales: 1, failed: 0, conflicts: 0 });
+    expect(r).toMatchObject({
+      categories: DEFAULT_CATEGORIES.length,
+      products: 16,
+      photos: 1,
+      sales: 1,
+      failed: 0,
+      conflicts: 0,
+    });
     expect(await db.outbox.where("status").anyOf("pending", "failed").count()).toBe(0);
     expect((await db.sales.get(sale.id))!.syncStatus).toBe("synced");
     expect(cloud.saleRows).toHaveLength(1);
@@ -152,7 +159,7 @@ describe("cloud sync", () => {
 
     await runSync(cloud.api(), b);
     expect(await b.products.count()).toBe(16);
-    expect(await b.categories.count()).toBe(4); // B's own "Pork" etc. merged into A's
+    expect(await b.categories.count()).toBe(DEFAULT_CATEGORIES.length); // B's own "Pork" etc. merged into A's
     const chickenB = await product(b, "Whole Chicken");
     expect((await b.categories.get(chickenB.categoryId))!.name).toBe("Chicken");
     expect(chickenB.stockQty).toBe(15);

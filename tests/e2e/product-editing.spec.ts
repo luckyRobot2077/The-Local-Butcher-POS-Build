@@ -14,22 +14,29 @@ test("edit photo, description and price inside POS mode with manager PIN", async
   await page.getByTestId("new-sale").click();
 
   await page.getByRole("link", { name: "Products" }).click();
-  await page.getByTestId("product-row").filter({ hasText: "Liempo" }).click();
-  await page.getByTestId("edit-product").click();
-  await setManagerPin(page);
+  const liempo = page.locator('[data-testid="product-row"][data-product="Liempo (Pork Belly)"]');
 
+  // Prices are edited right on the list, after the manager PIN.
+  await liempo.getByTestId("row-price").click();
+  await setManagerPin(page);
+  await liempo.getByTestId("row-price").fill("360");
+  await expect(liempo.getByTestId("row-margin")).toContainText("18%"); // (360 − 295) / 360
+  await liempo.getByTestId("row-reason").fill("Supplier price increase");
+  await liempo.getByTestId("row-save").click();
+  await expect(liempo.getByTestId("row-save")).toBeHidden();
+
+  // Photo and description in the product's own editor, which no longer has prices.
+  await liempo.getByTestId("product-open").click();
+  await page.getByTestId("edit-product").click();
+  await expect(page.getByTestId("product-price")).toHaveCount(0);
   await page.getByTestId("photo-gallery").setInputFiles(path.join(__dirname, "fixtures", "pork-belly.jpg"));
   await expect(page.getByAltText("Product photo preview")).toBeVisible();
   await page.getByTestId("product-description").fill("Skin-on belly, great for lechon kawali.");
-  await page.getByTestId("product-price").fill("360");
-  await page.getByTestId("save-product").click();
-  await expect(page.getByText("Give a reason for the price or cost change.")).toBeVisible();
-  await page.getByTestId("price-reason").fill("Supplier price increase");
   await page.getByTestId("save-product").click();
 
-  // Product details show the new price, photo and the price log.
+  // Product details show the photo and the price log.
   await expect(page.getByText("Skin-on belly, great for lechon kawali.")).toBeVisible();
-  await expect(page.getByText(/price: ₱350\.00 → ₱360\.00/)).toBeVisible();
+  await expect(page.getByText(/price: ₱350\.00 → ₱360\.00 · .* · “Supplier price increase”/)).toBeVisible();
   await expect(page.getByRole("img", { name: "Liempo (Pork Belly)" }).first()).toBeVisible();
 
   // Selling screen uses the new price; the earlier sale keeps ₱350.
@@ -53,7 +60,7 @@ test("cashier cannot edit prices without the PIN, and big discounts need approva
   await page.getByRole("button", { name: /Manager · Lock/ }).click();
 
   // Wrong PIN refuses editing.
-  await page.getByTestId("product-row").filter({ hasText: "Kasim" }).click();
+  await page.getByTestId("product-row").filter({ hasText: "Kasim" }).getByTestId("product-open").click();
   await page.getByTestId("edit-product").click();
   await page.getByLabel("Manager PIN").fill("0000");
   await page.getByRole("button", { name: "Approve" }).click();
@@ -61,6 +68,11 @@ test("cashier cannot edit prices without the PIN, and big discounts need approva
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByTestId("save-product")).toHaveCount(0);
   await page.keyboard.press("Escape");
+
+  // Prices on the list ask for the PIN too.
+  await page.getByTestId("product-row").filter({ hasText: "Kasim" }).getByTestId("row-price").click();
+  await expect(page.getByRole("heading", { name: "Manager approval" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
 
   // 20% discount is above the default 10% cashier limit.
   await page.getByRole("link", { name: "Sell" }).click();

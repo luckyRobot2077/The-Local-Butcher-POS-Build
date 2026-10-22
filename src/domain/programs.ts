@@ -1,7 +1,7 @@
 import { type Centavos } from "./money";
 import { type DiscountInput, describeDiscount } from "./discount";
 import { type Cart, type StackingPolicy, DEFAULT_STACKING, priceCart } from "./cart";
-import { lineGross } from "./pricing";
+import { cartLineGross } from "./pricing";
 import { formatPeso } from "./money";
 
 /**
@@ -84,7 +84,7 @@ function qualifies(p: DiscountProgram, productId: string, ctx: ProgramContext): 
 export function applyProgram(cart: Cart, p: DiscountProgram, ctx: ProgramContext): ProgramResult {
   if (!isProgramCurrent(p, ctx.today)) return { ok: false, reason: `${p.name} is not running today.` };
   if (p.membersOnly && !ctx.hasMember) return { ok: false, reason: `${p.name} is for members. Scan their card first.` };
-  const subtotal = cart.lines.reduce((s, l) => s + lineGross(l.saleUnit, l.unitPrice, l.qty), 0);
+  const subtotal = cart.lines.reduce((s, l) => s + cartLineGross(l), 0);
   if (subtotal < p.minPurchase) {
     return { ok: false, reason: `${p.name} needs a purchase of at least ${formatPeso(p.minPurchase)}.` };
   }

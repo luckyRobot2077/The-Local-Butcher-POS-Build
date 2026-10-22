@@ -56,7 +56,7 @@ test("receive a supplier delivery with a batch, see alerts and movement report",
 
   // Stock went up by 10.5 kg (9 sample − 1 sold + 10.5) and the batch shows on the product.
   await page.getByRole("link", { name: "Products" }).click();
-  await page.getByTestId("product-row").filter({ hasText: "Liempo" }).click();
+  await page.getByTestId("product-row").filter({ hasText: "Liempo" }).getByTestId("product-open").click();
   await expect(page.getByText("18.500 kg").first()).toBeVisible();
   await expect(page.getByTestId("batches-on-hand")).toContainText("Batch L-9");
 

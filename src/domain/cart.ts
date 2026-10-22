@@ -1,6 +1,6 @@
 import { type Centavos } from "./money";
 import { type SaleUnit } from "./quantity";
-import { lineGross } from "./pricing";
+import { cartLineGross } from "./pricing";
 import {
   type DiscountInput,
   DiscountError,
@@ -29,6 +29,11 @@ export interface CartLine {
   unitCost: Centavos;
   /** Grams for kg products, pieces for piece products. */
   qty: number;
+  /**
+   * Sold by peso amount ("₱100 worth" of a per-kg item): the customer pays
+   * exactly this, and qty is the weight it buys, to the nearest gram.
+   */
+  fixedAmount?: Centavos;
   discount?: AppliedDiscountInput;
 }
 
@@ -81,7 +86,7 @@ export function emptyCart(): Cart {
 export function priceCart(cart: Cart, policy: StackingPolicy = DEFAULT_STACKING): CartTotals {
   let maxBp = 0;
   const step1 = cart.lines.map((line) => {
-    const gross = lineGross(line.saleUnit, line.unitPrice, line.qty);
+    const gross = cartLineGross(line);
     const itemDiscount = line.discount ? discountAmount(line.discount.input, gross) : 0;
     if (line.discount?.source === "manual") maxBp = Math.max(maxBp, effectiveBasisPoints(itemDiscount, gross));
     return { line, gross, itemDiscount, afterItem: gross - itemDiscount };
@@ -146,7 +151,11 @@ export function addLine(cart: Cart, line: CartLine): Cart {
   return { ...cart, lines: [...cart.lines, line] };
 }
 
-export function updateLine(cart: Cart, lineId: string, patch: Partial<Pick<CartLine, "qty" | "discount">>): Cart {
+export function updateLine(
+  cart: Cart,
+  lineId: string,
+  patch: Partial<Pick<CartLine, "qty" | "fixedAmount" | "discount">>,
+): Cart {
   return {
     ...cart,
     lines: cart.lines.map((l) => (l.lineId === lineId ? { ...l, ...patch } : l)),

@@ -185,18 +185,21 @@ const SAMPLES: SampleProduct[] = [
   },
 ];
 
-export const DEFAULT_CATEGORIES = ["Pork", "Beef", "Chicken", "Salmon"];
+export const DEFAULT_CATEGORIES = ["Pork", "Beef", "Chicken", "Salmon", "Fresh Goods", "Condiments", "Side Dishes"];
 
+/**
+ * Adds any default category this device does not have yet (matched by name,
+ * ignoring case), after the existing ones. Devices that add the same name
+ * end up with one category in the cloud: sync matches categories by name.
+ */
 export async function ensureDefaultCategories(db = getDb()): Promise<void> {
   await db.transaction("rw", db.categories, async () => {
-    if ((await db.categories.count()) > 0) return;
-    await db.categories.bulkAdd(
-      DEFAULT_CATEGORIES.map((name, i) => ({
-        id: newId(),
-        name,
-        sortOrder: i,
-      })),
-    );
+    const existing = await db.categories.toArray();
+    const have = new Set(existing.map((c) => c.name.toLowerCase()));
+    let sortOrder = existing.reduce((m, c) => Math.max(m, c.sortOrder + 1), 0);
+    const missing = DEFAULT_CATEGORIES.filter((name) => !have.has(name.toLowerCase()));
+    if (missing.length)
+      await db.categories.bulkAdd(missing.map((name) => ({ id: newId(), name, sortOrder: sortOrder++ })));
   });
 }
 

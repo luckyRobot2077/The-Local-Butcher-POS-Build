@@ -9,6 +9,7 @@ import {
   createProduct,
   listCategories,
   productInputSchema,
+  productToInput,
   removeProductImage,
   setProductImage,
   updateProduct,
@@ -55,7 +56,6 @@ export function ProductEditor({
   const [sku, setSku] = useState(product?.sku ?? "");
   const [barcode, setBarcode] = useState(product?.barcode ?? "");
   const [active, setActive] = useState(product?.active ?? true);
-  const [reason, setReason] = useState("");
   const [photo, setPhoto] = useState<PendingPhoto>({ kind: "keep" });
   const [photoBusy, setPhotoBusy] = useState(false);
   const [newCategory, setNewCategory] = useState("");
@@ -71,7 +71,6 @@ export function ProductEditor({
   const parseQty = (s: string) => (s.trim() === "" ? 0 : saleUnit === "kg" ? parseWeight(s, "kg") : parsePieces(s));
   const minQty = parseQty(minStock);
   const openingQty = parseQty(openingStock);
-  const priceChanged = !!product && (priceC !== product.price || costC !== product.cost);
 
   const previewBlob = photo.kind === "new" ? photo.blob : photo.kind === "remove" ? undefined : currentImage;
 
@@ -97,7 +96,6 @@ export function ProductEditor({
     if (costC === null) return setError("Enter a valid cost (0 if unknown).");
     if (minQty === null) return setError("Enter a valid minimum stock.");
     if (openingQty === null) return setError("Enter a valid opening stock.");
-    if (priceChanged && !reason.trim()) return setError("Give a reason for the price or cost change.");
     const input = {
       name,
       description,
@@ -119,9 +117,10 @@ export function ProductEditor({
         const created = await createProduct(parsed.data, by, undefined, { initialStockQty: openingQty });
         id = created.id;
       } else {
-        // Limited mode can only change the description; other fields keep their stored values.
-        const data = full ? parsed.data : { ...pickInput(product), description };
-        await updateProduct(product.id, data, by, { reason, expectedVersion: product.version });
+        // Prices are changed on the product list. Limited mode can only change the description.
+        const kept = productToInput(product);
+        const data = full ? { ...parsed.data, price: kept.price, cost: kept.cost } : { ...kept, description };
+        await updateProduct(product.id, data, by, { expectedVersion: product.version });
       }
       if (photo.kind === "new") await setProductImage(id!, photo, by);
       if (photo.kind === "remove") await removeProductImage(id!, by);
@@ -280,39 +279,33 @@ export function ProductEditor({
                   Add
                 </Button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label={`Selling price (₱${unitLabel(saleUnit)})`}>
-                  <input
-                    className={inputClass}
-                    inputMode="decimal"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    data-testid="product-price"
-                  />
-                </Field>
-                <Field label={`Cost (₱${unitLabel(saleUnit)})`} hint="Used for profit reports.">
-                  <input
-                    className={inputClass}
-                    inputMode="decimal"
-                    value={cost}
-                    onChange={(e) => setCost(e.target.value)}
-                    data-testid="product-cost"
-                  />
-                </Field>
-              </div>
-              {priceChanged && (
-                <Field
-                  label="Reason for price change"
-                  hint="Saved in the price history. Past sales keep their old prices."
-                >
-                  <input
-                    className={inputClass}
-                    value={reason}
-                    maxLength={120}
-                    onChange={(e) => setReason(e.target.value)}
-                    data-testid="price-reason"
-                  />
-                </Field>
+              {product ? (
+                <p className="text-sm text-charcoal-500">
+                  Selling price {formatPeso(product.price)}
+                  {unitLabel(product.saleUnit)}, cost {formatPeso(product.cost)}
+                  {unitLabel(product.saleUnit)}. Change prices on the Products list.
+                </p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label={`Selling price (₱${unitLabel(saleUnit)})`}>
+                    <input
+                      className={inputClass}
+                      inputMode="decimal"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      data-testid="product-price"
+                    />
+                  </Field>
+                  <Field label={`Cost (₱${unitLabel(saleUnit)})`} hint="Used for profit reports.">
+                    <input
+                      className={inputClass}
+                      inputMode="decimal"
+                      value={cost}
+                      onChange={(e) => setCost(e.target.value)}
+                      data-testid="product-cost"
+                    />
+                  </Field>
+                </div>
               )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label={`Low-stock warning at (${saleUnit === "kg" ? "kg" : "pcs"})`}>
@@ -373,19 +366,4 @@ export function ProductEditor({
       </div>
     </Modal>
   );
-}
-
-function pickInput(p: Product) {
-  return {
-    name: p.name,
-    description: p.description,
-    categoryId: p.categoryId,
-    sku: p.sku,
-    barcode: p.barcode,
-    saleUnit: p.saleUnit,
-    price: p.price,
-    cost: p.cost,
-    minStockQty: p.minStockQty,
-    active: p.active,
-  };
 }

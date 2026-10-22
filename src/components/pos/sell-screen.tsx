@@ -227,6 +227,7 @@ export function SellScreen() {
                 </div>
                 <div className="flex justify-between gap-2 text-sm text-charcoal-500">
                   <span>
+                    {l.fixedAmount !== undefined && `${formatPeso(l.fixedAmount)} worth · about `}
                     {formatQuantity(l.saleUnit, l.qty)} × {formatPeso(l.unitPrice)}
                     {unitLabel(l.saleUnit)}
                   </span>
@@ -393,7 +394,7 @@ export function SellScreen() {
           unitPrice={dialog.product.price}
           confirmLabel="Add to sale"
           onClose={() => setDialog(null)}
-          onConfirm={(qty) => {
+          onConfirm={(qty, fixedAmount) => {
             const p = dialog.product;
             setCart((c) =>
               addLine(c, {
@@ -404,6 +405,7 @@ export function SellScreen() {
                 unitPrice: p.price,
                 unitCost: p.cost,
                 qty,
+                fixedAmount,
               }),
             );
             setDialog(null);
@@ -416,14 +418,15 @@ export function SellScreen() {
           saleUnit={editingLine.saleUnit}
           unitPrice={editingLine.unitPrice}
           initialQty={editingLine.qty}
+          initialAmount={editingLine.fixedAmount}
           confirmLabel="Update"
           onClose={() => setDialog(null)}
           onRemove={() => {
             setCart((c) => removeLine(c, editingLine.lineId));
             setDialog(null);
           }}
-          onConfirm={(qty) => {
-            const next = updateLine(cart, editingLine.lineId, { qty });
+          onConfirm={(qty, fixedAmount) => {
+            const next = updateLine(cart, editingLine.lineId, { qty, fixedAmount });
             try {
               priceCart(next, policy);
               setCart(next);

@@ -20,6 +20,33 @@ export type ProductInput = z.infer<typeof productInputSchema>;
 
 export class ProductError extends Error {}
 
+/** A stored product as editable input, for changing a few fields and keeping the rest. */
+export function productToInput(p: Product): ProductInput {
+  return {
+    name: p.name,
+    description: p.description,
+    categoryId: p.categoryId,
+    sku: p.sku,
+    barcode: p.barcode,
+    saleUnit: p.saleUnit,
+    price: p.price,
+    cost: p.cost,
+    minStockQty: p.minStockQty,
+    active: p.active,
+  };
+}
+
+/** Changes only the selling price and cost (from the product list). */
+export async function updatePrices(
+  p: Product,
+  prices: { price: number; cost: number },
+  by: string,
+  reason?: string,
+  db = getDb(),
+): Promise<Product> {
+  return updateProduct(p.id, { ...productToInput(p), ...prices }, by, { reason, expectedVersion: p.version }, db);
+}
+
 const TRACKED_FIELDS = [
   "name",
   "description",

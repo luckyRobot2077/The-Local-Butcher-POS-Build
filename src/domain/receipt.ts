@@ -1,5 +1,6 @@
 import { formatPeso } from "./money";
 import { formatQuantity, unitLabel } from "./quantity";
+import { lineGross } from "./pricing";
 import { formatManila } from "./time";
 import { describeDiscount } from "./discount";
 import type { PaymentRecord, SaleItemRecord, SaleRecord } from "./checkout";
@@ -99,7 +100,9 @@ export function renderReceipt(r: ReceiptInput, width = RECEIPT_WIDTH_58MM): stri
 
   for (const it of items) {
     lines.push(...wrap(it.productName, width));
-    const detail = `  ${formatQuantity(it.saleUnit, it.qty)} @ ${formatPeso(it.unitPrice)}${unitLabel(it.saleUnit)}`;
+    // Sold by peso amount: the amount is exact and the weight is about what it buys.
+    const approx = it.saleUnit === "kg" && it.gross !== lineGross(it.saleUnit, it.unitPrice, it.qty) ? "~" : "";
+    const detail = `  ${approx}${formatQuantity(it.saleUnit, it.qty)} @ ${formatPeso(it.unitPrice)}${unitLabel(it.saleUnit)}`;
     lines.push(...leftRight(detail, formatPeso(it.gross), width));
     if (it.itemDiscount > 0) {
       const label = it.discount ? `  Less ${discountLabel(it.discount)}` : "  Less discount";

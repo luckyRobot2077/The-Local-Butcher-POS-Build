@@ -220,16 +220,17 @@ function BackupSection() {
 
 function SettingsSectionKeyed() {
   const { settings } = usePos();
+  // Kept here so "Saved." survives the remount after saving.
+  const [msg, setMsg] = useState<string>();
   // Remount the form when saved settings change so it shows the stored values.
-  return <SettingsSection key={JSON.stringify(settings)} />;
+  return <SettingsSection key={JSON.stringify(settings)} msg={msg} setMsg={setMsg} />;
 }
 
-function SettingsSection() {
+function SettingsSection({ msg, setMsg }: { msg?: string; setMsg: (m: string | undefined) => void }) {
   const { settings, requestManager } = usePos();
   const [draft, setDraft] = useState<Settings>(settings);
   const [linesText, setLinesText] = useState(settings.businessLines.join("\n"));
   const [limitText, setLimitText] = useState(String(settings.cashierDiscountLimitBp / 100));
-  const [msg, setMsg] = useState<string>();
   const [error, setError] = useState<string>();
 
   async function save() {
@@ -289,6 +290,32 @@ function SettingsSection() {
           onChange={(e) => setDraft({ ...draft, receiptFooter: e.target.value })}
         />
       </Field>
+      <fieldset className="grid gap-3 rounded-xl border border-cream-300 p-3">
+        <legend className="px-1 text-sm font-semibold text-charcoal-700">Social media on member cards</legend>
+        <p className="text-xs text-charcoal-500">
+          Printed under the QR code with a small icon. Leave a box empty to leave it off the card.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {(
+            [
+              ["facebook", "Facebook page", "e.g. fb.com/thelocalbutcherargao", 60],
+              ["tiktok", "TikTok account", "e.g. @thelocalbutcher", 60],
+              ["whatsapp", "WhatsApp number", "e.g. 0917 123 4567", 30],
+            ] as const
+          ).map(([key, label, placeholder, max]) => (
+            <Field key={key} label={label}>
+              <input
+                className={inputClass}
+                value={draft.socials[key]}
+                maxLength={max}
+                placeholder={placeholder}
+                onChange={(e) => setDraft({ ...draft, socials: { ...draft.socials, [key]: e.target.value } })}
+                data-testid={`social-${key}`}
+              />
+            </Field>
+          ))}
+        </div>
+      </fieldset>
       <Field label="Cashier discount limit (%)" hint="Discounts above this need the manager PIN.">
         <input
           className={inputClass}
