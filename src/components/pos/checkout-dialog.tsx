@@ -22,6 +22,7 @@ export function CheckoutDialog({
   cashierName,
   orderDiscountDetail,
   discountApprovedBy,
+  member,
   onClose,
   onCompleted,
 }: {
@@ -29,6 +30,7 @@ export function CheckoutDialog({
   cashierName: string;
   orderDiscountDetail?: AppliedDiscountInput;
   discountApprovedBy?: string;
+  member?: { id: string; memberNo: string; name: string };
   onClose: () => void;
   onCompleted: (saleId: string) => void;
 }) {
@@ -51,7 +53,14 @@ export function CheckoutDialog({
         method === "cash"
           ? { method: "cash", tendered: tendered! }
           : { method: "gcash", reference: reference || undefined };
-      const sale = await completeSale({ totals, payment, cashierName, orderDiscountDetail, discountApprovedBy });
+      const sale = await completeSale({
+        totals,
+        payment,
+        cashierName,
+        orderDiscountDetail,
+        discountApprovedBy,
+        member: member && { id: member.id, memberNo: member.memberNo },
+      });
       onCompleted(sale.id);
     } catch (e) {
       // Nothing was saved: the local write is a single transaction.
@@ -92,6 +101,11 @@ export function CheckoutDialog({
           </div>
           {totals.discountTotal > 0 && (
             <div className="text-sm opacity-80">Includes {formatPeso(totals.discountTotal)} discount</div>
+          )}
+          {member && (
+            <div className="text-sm opacity-80">
+              Member {member.name} · {member.memberNo}
+            </div>
           )}
         </div>
         <div

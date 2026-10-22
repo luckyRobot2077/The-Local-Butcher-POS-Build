@@ -3,6 +3,7 @@ import { formatQuantity, unitLabel } from "./quantity";
 import { formatManila } from "./time";
 import { describeDiscount } from "./discount";
 import type { PaymentRecord, SaleItemRecord, SaleRecord } from "./checkout";
+import type { AppliedDiscountInput } from "./cart";
 
 /**
  * Transport-independent receipt renderer. It produces plain text lines
@@ -70,6 +71,14 @@ export function leftRight(left: string, right: string, width: number): string[] 
   return [...lefts, last.padEnd(room) + " " + right];
 }
 
+/** Program discounts print the program's name; typed ones print the rate. */
+function discountLabel(d: AppliedDiscountInput): string {
+  if (d.source === "promotion" && d.reason) {
+    return d.input.kind === "percent" ? `${d.reason} ${describeDiscount(d.input)}` : d.reason;
+  }
+  return describeDiscount(d.input);
+}
+
 export function renderReceipt(r: ReceiptInput, width = RECEIPT_WIDTH_58MM): string[] {
   const { header, sale, items, payment } = r;
   const rule = "-".repeat(width);
@@ -85,6 +94,7 @@ export function renderReceipt(r: ReceiptInput, width = RECEIPT_WIDTH_58MM): stri
   lines.push(...leftRight("Receipt", sale.receiptNo, width));
   lines.push(...wrap(formatManila(sale.createdAt), width));
   lines.push(...leftRight("Cashier", sale.cashierName, width));
+  if (sale.memberNo) lines.push(...leftRight("Member", sale.memberNo, width));
   lines.push(rule);
 
   for (const it of items) {
@@ -92,7 +102,7 @@ export function renderReceipt(r: ReceiptInput, width = RECEIPT_WIDTH_58MM): stri
     const detail = `  ${formatQuantity(it.saleUnit, it.qty)} @ ${formatPeso(it.unitPrice)}${unitLabel(it.saleUnit)}`;
     lines.push(...leftRight(detail, formatPeso(it.gross), width));
     if (it.itemDiscount > 0) {
-      const label = it.discount ? `  Less ${describeDiscount(it.discount.input)}` : "  Less discount";
+      const label = it.discount ? `  Less ${discountLabel(it.discount)}` : "  Less discount";
       lines.push(...leftRight(label, "-" + formatPeso(it.itemDiscount), width));
     }
   }
@@ -102,8 +112,11 @@ export function renderReceipt(r: ReceiptInput, width = RECEIPT_WIDTH_58MM): stri
     lines.push(...leftRight("Item discounts", "-" + formatPeso(sale.itemDiscountTotal), width));
   }
   if (sale.orderDiscount > 0) {
-    const label = sale.orderDiscountDetail
-      ? `Order ${describeDiscount(sale.orderDiscountDetail.input)}`
+    const d = sale.orderDiscountDetail;
+    const label = d
+      ? d.source === "promotion"
+        ? discountLabel(d)
+        : `Order ${describeDiscount(d.input)}`
       : "Order discount";
     lines.push(...leftRight(label, "-" + formatPeso(sale.orderDiscount), width));
   }

@@ -38,6 +38,15 @@ device in IndexedDB first, so the shop can keep selling with no internet, and ar
   sales, rising wastage, demand up or down); fast/normal/slow/non-moving classification among similar
   products, sales per day counted only on days in stock, stock coverage, sell-through, wastage rate,
   gross profit; suggested order quantities (estimates only); CSV export; adjustable thresholds.
+- **Members and discount programs (Phase 4, POS → Members):** register a member with name, age
+  (stored as birth year), gender, optional mobile number and recorded consent; the member number and
+  QR code are made on save, and the ID-card-size card can be printed or saved as an image. At the
+  counter the card is scanned with the device camera (no separate app), a USB scanner, or by typing
+  the number, and every sale is logged to the member's history. Owners and managers set up discount
+  programs (percent or pesos, whole sale or selected items, members only, minimum purchase, dates);
+  the cashier just picks one from the **Discount program** list. Insights show members by gender and
+  age, member share of sales and top members, and export the opted-in mobile numbers as CSV for an SMS
+  provider. No tiers.
 - **Offline:** after one online visit the installed app opens, sells and keeps sales with no
   internet, including after closing and reopening.
 
@@ -93,8 +102,8 @@ someone edits a product, the app asks them to create the **manager PIN**.
    account to do this becomes the owner; it only works while the database has no store.
 6. Owner adds staff on the Device tab (after creating their login in Supabase).
 
-**Updating later:** when a new release adds a migration (for example `20261023000005_inventory.sql` in
-Phase 3), run just that new file once in the SQL Editor. Until it is run, sales still sync and the
+**Updating later:** when a new release adds a migration (for example `20261024000006_members.sql` in
+Phase 4), run just that new file once in the SQL Editor. Until it is run, sales still sync and the
 Device tab says the cloud database needs an update.
 
 The service-role key is **not** used by the app today. If you add it to Vercel, keep it server-only.

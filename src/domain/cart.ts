@@ -11,8 +11,10 @@ import {
 
 export interface AppliedDiscountInput {
   input: DiscountInput;
-  /** "manual" for now; promotions arrive in Phase 4. */
-  source: "manual";
+  /** "manual": typed by the cashier. "promotion": from a discount program set up by a manager. */
+  source: "manual" | "promotion";
+  /** The discount program, when source is "promotion". */
+  promotionId?: string;
   reason?: string;
 }
 
@@ -33,6 +35,10 @@ export interface CartLine {
 export interface Cart {
   lines: CartLine[];
   orderDiscount?: AppliedDiscountInput;
+  /** Discount program picked for this sale; applied when the cart is priced (see programs.ts). */
+  programId?: string;
+  /** Member card attached to this sale. */
+  member?: { id: string; memberNo: string; name: string };
 }
 
 export interface StackingPolicy {
@@ -61,7 +67,10 @@ export interface CartTotals {
   orderDiscount: Centavos;
   discountTotal: Centavos;
   total: Centavos;
-  /** Largest single discount as basis points of what it applied to. */
+  /**
+   * Largest single typed (manual) discount as basis points of what it
+   * applied to. Program discounts are left out: a manager already set them.
+   */
   maxDiscountBasisPoints: number;
 }
 
@@ -74,7 +83,7 @@ export function priceCart(cart: Cart, policy: StackingPolicy = DEFAULT_STACKING)
   const step1 = cart.lines.map((line) => {
     const gross = lineGross(line.saleUnit, line.unitPrice, line.qty);
     const itemDiscount = line.discount ? discountAmount(line.discount.input, gross) : 0;
-    if (line.discount) maxBp = Math.max(maxBp, effectiveBasisPoints(itemDiscount, gross));
+    if (line.discount?.source === "manual") maxBp = Math.max(maxBp, effectiveBasisPoints(itemDiscount, gross));
     return { line, gross, itemDiscount, afterItem: gross - itemDiscount };
   });
 
@@ -88,7 +97,9 @@ export function priceCart(cart: Cart, policy: StackingPolicy = DEFAULT_STACKING)
       throw new DiscountError("No items are eligible for an order discount.");
     }
     orderDiscount = discountAmount(cart.orderDiscount.input, orderDiscountEligible);
-    maxBp = Math.max(maxBp, effectiveBasisPoints(orderDiscount, orderDiscountEligible));
+    if (cart.orderDiscount.source === "manual") {
+      maxBp = Math.max(maxBp, effectiveBasisPoints(orderDiscount, orderDiscountEligible));
+    }
   }
   const shares = allocateProportionally(orderDiscount, eligibleAmounts);
 
@@ -144,7 +155,7 @@ export function updateLine(cart: Cart, lineId: string, patch: Partial<Pick<CartL
 
 export function removeLine(cart: Cart, lineId: string): Cart {
   const lines = cart.lines.filter((l) => l.lineId !== lineId);
-  return { ...cart, lines, orderDiscount: lines.length ? cart.orderDiscount : undefined };
+  return lines.length ? { ...cart, lines } : { ...cart, lines, orderDiscount: undefined, programId: undefined };
 }
 
 export function setOrderDiscount(cart: Cart, discount: AppliedDiscountInput | undefined): Cart {

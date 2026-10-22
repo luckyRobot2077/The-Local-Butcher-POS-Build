@@ -20,6 +20,9 @@ import {
   type CartTotals,
 } from "@/domain/cart";
 import { describeDiscount } from "@/domain/discount";
+import { applyProgram, describeProgram, isProgramCurrent } from "@/domain/programs";
+import { businessDate } from "@/domain/time";
+import { listPrograms } from "@/lib/db/programs";
 import { Button, ErrorText, Modal } from "@/components/ui";
 import { usePos } from "./pos-context";
 import { ProductTile } from "./product-tile";
@@ -28,6 +31,7 @@ import { DiscountDialog } from "./discount-dialog";
 import { CheckoutDialog } from "./checkout-dialog";
 import { ReceiptView } from "./receipt-view";
 import { useRequestSync } from "./cloud-sync";
+import { MemberPicker } from "./members/member-picker";
 
 const CART_KEY = "tlb-open-cart";
 
@@ -48,6 +52,7 @@ type Dialog =
   | { type: "checkout" }
   | { type: "void" }
   | { type: "done"; saleId: string }
+  | { type: "member" }
   | null;
 
 export function SellScreen() {
@@ -55,6 +60,7 @@ export function SellScreen() {
   const requestSync = useRequestSync();
   const products = useLiveQuery(() => getDb().products.toArray(), []);
   const categories = useLiveQuery(() => listCategories(), []);
+  const programs = useLiveQuery(() => listPrograms(), []);
   const [category, setCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   // Restores an unfinished cart if the app was closed mid-sale. This screen
@@ -74,10 +80,27 @@ export function SellScreen() {
   }, [cart]);
 
   const policy = { allowItemAndOrderStacking: settings.allowItemAndOrderStacking };
+  const productById = useMemo(() => new Map((products ?? []).map((p) => [p.id, p])), [products]);
+  const today = businessDate(new Date());
+  const offered = (programs ?? []).filter((p) => isProgramCurrent(p, today));
+  const program = cart.programId ? programs?.find((p) => p.id === cart.programId) : undefined;
+  // The program is applied each time the cart is priced, so it is re-checked whenever the sale changes.
+  const programResult = program
+    ? applyProgram(cart, program, {
+        today,
+        hasMember: !!cart.member,
+        categoryOf: (id) => productById.get(id)?.categoryId,
+        policy,
+      })
+    : undefined;
+  const effective = programResult?.ok ? programResult.cart : cart;
+  const programNote = programResult && !programResult.ok ? programResult.reason : undefined;
+  const orderProgram = programResult?.ok && program?.scope === "order";
+
   let totals: CartTotals | null = null;
   let cartError: string | undefined;
   try {
-    totals = priceCart(cart, policy);
+    totals = priceCart(effective, policy);
   } catch (e) {
     cartError = e instanceof Error ? e.message : String(e);
   }
@@ -91,7 +114,6 @@ export function SellScreen() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [products, category, search]);
 
-  const productById = useMemo(() => new Map((products ?? []).map((p) => [p.id, p])), [products]);
   const lineCount = cart.lines.length;
 
   async function approveIfNeeded(next: Cart): Promise<boolean> {
@@ -214,7 +236,11 @@ export function SellScreen() {
                 </div>
               </button>
               <div className="mt-1 flex items-center gap-2">
-                {l.discount ? (
+                {l.discount?.source === "promotion" ? (
+                  <span className="text-xs font-semibold text-emerald-800">
+                    {describeDiscount(l.discount.input)} · {l.discount.reason}
+                  </span>
+                ) : l.discount ? (
                   <button
                     type="button"
                     className="text-xs font-semibold text-emerald-800 underline"
@@ -242,6 +268,67 @@ export function SellScreen() {
           ))}
         </ul>
         <div className="grid gap-2 border-t border-cream-300 bg-white p-3">
+          <div className="flex items-center justify-between gap-2 text-sm" data-testid="sale-member">
+            {cart.member ? (
+              <>
+                <span>
+                  <span className="font-semibold">Member:</span> {cart.member.name}{" "}
+                  <span className="font-mono text-xs text-charcoal-500">{cart.member.memberNo}</span>
+                </span>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-red-700 underline"
+                  onClick={() => setCart((c) => ({ ...c, member: undefined }))}
+                >
+                  Remove
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="font-semibold text-burgundy-700 underline"
+                onClick={() => setDialog({ type: "member" })}
+                data-testid="add-member"
+              >
+                + Member card
+              </button>
+            )}
+          </div>
+          {(offered.length > 0 || program) && (
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold text-charcoal-700">Discount program</span>
+              <select
+                className="min-h-10 rounded-lg border border-cream-300 bg-white px-2"
+                value={cart.programId ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value || undefined;
+                  const next = programs?.find((p) => p.id === id);
+                  // An order program takes the place of a typed order discount.
+                  setCart((c) => ({
+                    ...c,
+                    programId: id,
+                    orderDiscount: next?.scope === "order" ? undefined : c.orderDiscount,
+                  }));
+                }}
+                data-testid="program-select"
+              >
+                <option value="">None</option>
+                {offered.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({describeProgram(p)})
+                  </option>
+                ))}
+                {program && !offered.includes(program) && (
+                  <option value={program.id}>{program.name} (not running)</option>
+                )}
+              </select>
+              {programNote && (
+                <span className="text-xs font-semibold text-amber-800" data-testid="program-note">
+                  {programNote}
+                </span>
+              )}
+            </label>
+          )}
           <ErrorText>{cartError || error}</ErrorText>
           {totals && (
             <dl className="grid gap-1 text-sm">
@@ -257,14 +344,18 @@ export function SellScreen() {
               )}
               <div className="flex items-center justify-between text-emerald-800">
                 <dt>
-                  <button
-                    type="button"
-                    disabled={lineCount === 0}
-                    className="font-semibold text-burgundy-700 underline disabled:text-charcoal-500 disabled:no-underline"
-                    onClick={() => setDialog({ type: "orderDiscount" })}
-                  >
-                    {cart.orderDiscount ? `Order discount (${cart.orderDiscount.reason})` : "+ Order discount"}
-                  </button>
+                  {orderProgram ? (
+                    <span className="font-semibold">{program?.name}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={lineCount === 0}
+                      className="font-semibold text-burgundy-700 underline disabled:text-charcoal-500 disabled:no-underline"
+                      onClick={() => setDialog({ type: "orderDiscount" })}
+                    >
+                      {cart.orderDiscount ? `Order discount (${cart.orderDiscount.reason})` : "+ Order discount"}
+                    </button>
+                  )}
                 </dt>
                 {totals.orderDiscount > 0 && <dd>-{formatPeso(totals.orderDiscount)}</dd>}
               </div>
@@ -377,7 +468,7 @@ export function SellScreen() {
       {dialog?.type === "orderDiscount" && totals && (
         <DiscountDialog
           title="Order discount"
-          eligibleAmount={priceCart(setOrderDiscount(cart, undefined), policy).orderDiscountEligible}
+          eligibleAmount={priceCart(setOrderDiscount(effective, undefined), policy).orderDiscountEligible}
           initial={cart.orderDiscount}
           onClose={() => setDialog(null)}
           onRemove={
@@ -406,7 +497,8 @@ export function SellScreen() {
         <CheckoutDialog
           totals={totals}
           cashierName={cashierName}
-          orderDiscountDetail={cart.orderDiscount}
+          orderDiscountDetail={effective.orderDiscount}
+          member={cart.member}
           discountApprovedBy={
             totals.maxDiscountBasisPoints > settings.cashierDiscountLimitBp ? discountApprovedBy : undefined
           }
@@ -415,6 +507,15 @@ export function SellScreen() {
             resetSale();
             requestSync();
             setDialog({ type: "done", saleId });
+          }}
+        />
+      )}
+      {dialog?.type === "member" && (
+        <MemberPicker
+          onClose={() => setDialog(null)}
+          onPick={(m) => {
+            setCart((c) => ({ ...c, member: { id: m.id, memberNo: m.memberNo, name: m.name } }));
+            setDialog(null);
           }}
         />
       )}

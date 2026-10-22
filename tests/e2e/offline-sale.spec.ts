@@ -61,6 +61,10 @@ test("offline cash sale survives an app restart", async ({ page, context }) => {
   await expect(inv.getByTestId("reachability")).toHaveText("Offline");
   await expect(inv.getByText("Inventory shows costs, suppliers and profit")).toBeVisible();
 
+  // So do members: a card can be registered without internet.
+  await inv.goto("/pos/members");
+  await expect(inv.getByTestId("register-member")).toBeVisible();
+
   await context.setOffline(false);
 });
 

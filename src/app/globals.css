@@ -52,3 +52,24 @@ body {
     border: 0 !important;
   }
 }
+
+/* Member card printing (see member-card.tsx): ID-card size, only the card. */
+@media print {
+  html.printing-card .print-area {
+    display: none;
+  }
+  html.printing-card .print-card,
+  html.printing-card .print-card * {
+    visibility: visible;
+  }
+  html.printing-card .print-card {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 85.6mm;
+    height: 54mm;
+    margin: 0;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+}

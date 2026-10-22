@@ -1,5 +1,6 @@
 import type { Centavos } from "@/domain/money";
 import type { SaleUnit } from "@/domain/quantity";
+import type { Gender } from "@/domain/members";
 
 export interface Category {
   id: string;
@@ -153,10 +154,46 @@ export interface RemoteSaleLine {
   net: Centavos;
   cost: Centavos;
   at: string;
+  /** Member on that sale, if any. */
+  customerId?: string;
+}
+
+/** A registered store member (customers in the cloud). No tiers. */
+export interface Member {
+  id: string;
+  /** Printed on the card under the QR code, e.g. M-A1B2-0007. Never changes. */
+  memberNo: string;
+  name: string;
+  /** Stored instead of age so it stays right in later years. */
+  birthYear: number;
+  gender: Gender;
+  /** +639XXXXXXXXX, optional. */
+  contactNumber?: string;
+  /** When the member agreed to the store keeping their details. Required. */
+  privacyConsentAt: string;
+  /** Agreed to member-only promo messages (SMS). Optional and can be withdrawn. */
+  marketingConsent: boolean;
+  marketingConsentAt?: string;
+  active: boolean;
+  notes?: string;
+  registeredAt: string;
+  registeredBy: string;
+  deviceId?: string;
+  updatedAt: string;
+  /** Registered on another device and downloaded from the cloud. */
+  remote?: boolean;
 }
 
 export type OutboxKind =
-  "sale" | "product" | "inventory_movement" | "product_image" | "supplier" | "purchase" | "purchase_payment";
+  | "sale"
+  | "product"
+  | "inventory_movement"
+  | "product_image"
+  | "supplier"
+  | "purchase"
+  | "purchase_payment"
+  | "customer"
+  | "promotion";
 
 export interface OutboxEntry {
   id: string;
