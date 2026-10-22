@@ -4,6 +4,7 @@ import { useState } from "react";
 import { DEFAULT_INVENTORY_RULES, type InventoryRules } from "@/domain/inventory";
 import { saveSettings } from "@/lib/db/config";
 import { Button, ErrorText, Field, inputClass } from "@/components/ui";
+import { NumberInput } from "@/components/keypad";
 import { usePos } from "../pos-context";
 
 const FIELDS: { key: keyof InventoryRules; label: string; hint: string }[] = [
@@ -51,9 +52,9 @@ export function RulesTab() {
       <div className="grid gap-3 sm:grid-cols-2">
         {FIELDS.map((f) => (
           <Field key={f.key} label={f.label} hint={f.hint}>
-            <input
+            <NumberInput
+              decimal={false}
               className={inputClass}
-              inputMode="numeric"
               value={values[f.key]}
               onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
             />

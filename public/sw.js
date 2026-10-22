@@ -12,7 +12,7 @@
  *    pages keep working while an update rolls out.
  *  - PAGES_CACHE: HTML for the app routes, refreshed on every online visit.
  */
-const VERSION = "v7";
+const VERSION = "v8";
 const STATIC_CACHE = "tlb-static";
 const PAGES_CACHE = `tlb-pages-${VERSION}`;
 const APP_ROUTES = ["/pos", "/pos/products", "/pos/members", "/pos/inventory", "/pos/history", "/pos/device", "/office", "/"];

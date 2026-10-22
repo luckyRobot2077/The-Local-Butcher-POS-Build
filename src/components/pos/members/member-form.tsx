@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db/db";
 import { registerMember, updateMember } from "@/lib/db/members";
 import type { Member } from "@/lib/db/types";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
+import { NumberInput } from "@/components/keypad";
 import { usePos } from "../pos-context";
 
 type Errors = Partial<
@@ -143,9 +144,9 @@ export function MemberForm({
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Age" hint="Saved as birth year" error={errors.age}>
-            <input
+            <NumberInput
+              decimal={false}
               className={inputClass}
-              inputMode="numeric"
               value={age}
               onChange={(e) => setAge(e.target.value.replace(/\D/g, "").slice(0, 3))}
               data-testid="member-age"

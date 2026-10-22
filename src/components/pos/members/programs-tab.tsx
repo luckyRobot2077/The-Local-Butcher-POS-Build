@@ -11,6 +11,7 @@ import { getDb } from "@/lib/db/db";
 import { listCategories } from "@/lib/db/products";
 import { listPrograms, saveProgram, type ProgramInput } from "@/lib/db/programs";
 import { Badge, Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
+import { NumberInput } from "@/components/keypad";
 import { usePos } from "../pos-context";
 
 /** Discount programs the cashier picks from at checkout. Setting them up needs the manager PIN. */
@@ -187,9 +188,9 @@ function ProgramEditor({ program, onClose }: { program?: DiscountProgram; onClos
                 <option value="percent">%</option>
                 <option value="fixed">₱</option>
               </select>
-              <input
+              <NumberInput
+                wrapperClassName="flex-1"
                 className={inputClass}
-                inputMode="decimal"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 data-testid="program-value"
@@ -236,12 +237,7 @@ function ProgramEditor({ program, onClose }: { program?: DiscountProgram; onClos
         )}
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Minimum purchase (₱)" hint="Before discounts. Empty = none.">
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              value={minPurchase}
-              onChange={(e) => setMinPurchase(e.target.value)}
-            />
+            <NumberInput className={inputClass} value={minPurchase} onChange={(e) => setMinPurchase(e.target.value)} />
           </Field>
           <Field label="Starts on (optional)">
             <input className={inputClass} type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />

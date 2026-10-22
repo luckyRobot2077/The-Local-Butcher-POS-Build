@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatPeso, parsePeso } from "@/domain/money";
 import { discountAmount, DiscountError, parsePercent, type DiscountInput } from "@/domain/discount";
+import { Keypad } from "@/components/keypad";
 import { Button, Field, Modal, inputClass } from "@/components/ui";
 
 export function DiscountDialog({
@@ -108,13 +109,14 @@ export function DiscountDialog({
         <Field label={kind === "percent" ? "Percent off" : "Pesos off"} error={error}>
           <input
             className={`${inputClass} text-xl font-bold`}
-            inputMode="decimal"
+            inputMode="none"
             autoFocus
             value={text}
             onChange={(e) => setText(e.target.value)}
             data-testid="discount-value"
           />
         </Field>
+        <Keypad value={text} onChange={setText} compact maxLength={8} />
         <Field label="Reason" hint="Required. Saved with the sale for auditing.">
           <input
             className={inputClass}

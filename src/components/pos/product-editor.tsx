@@ -19,6 +19,7 @@ import { compressImage } from "@/lib/images";
 import { useImageBlob } from "@/lib/hooks/use-image-url";
 import { BlobImage } from "@/components/blob-image";
 import { Badge, Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
+import { NumberInput } from "@/components/keypad";
 
 type PendingPhoto =
   { kind: "keep" } | { kind: "remove" } | { kind: "new"; blob: Blob; mime: string; width: number; height: number };
@@ -288,18 +289,16 @@ export function ProductEditor({
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label={`Selling price (₱${unitLabel(saleUnit)})`}>
-                    <input
+                    <NumberInput
                       className={inputClass}
-                      inputMode="decimal"
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
                       data-testid="product-price"
                     />
                   </Field>
                   <Field label={`Cost (₱${unitLabel(saleUnit)})`} hint="Used for profit reports.">
-                    <input
+                    <NumberInput
                       className={inputClass}
-                      inputMode="decimal"
                       value={cost}
                       onChange={(e) => setCost(e.target.value)}
                       data-testid="product-cost"
@@ -309,21 +308,15 @@ export function ProductEditor({
               )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label={`Low-stock warning at (${saleUnit === "kg" ? "kg" : "pcs"})`}>
-                  <input
-                    className={inputClass}
-                    inputMode="decimal"
-                    value={minStock}
-                    onChange={(e) => setMinStock(e.target.value)}
-                  />
+                  <NumberInput className={inputClass} value={minStock} onChange={(e) => setMinStock(e.target.value)} />
                 </Field>
                 {!product ? (
                   <Field
                     label={`Opening stock (${saleUnit === "kg" ? "kg" : "pcs"})`}
                     hint="Recorded as a stock delivery."
                   >
-                    <input
+                    <NumberInput
                       className={inputClass}
-                      inputMode="decimal"
                       value={openingStock}
                       onChange={(e) => setOpeningStock(e.target.value)}
                     />

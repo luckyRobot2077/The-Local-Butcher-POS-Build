@@ -16,6 +16,7 @@ import { formatManila } from "@/domain/time";
 import { Badge, Button, ErrorText, Field, inputClass } from "@/components/ui";
 import { usePos } from "./pos-context";
 import { getDb } from "@/lib/db/db";
+import { NumberInput } from "@/components/keypad";
 import { CloudSection } from "./cloud-section";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -317,12 +318,7 @@ function SettingsSection({ msg, setMsg }: { msg?: string; setMsg: (m: string | u
         </div>
       </fieldset>
       <Field label="Cashier discount limit (%)" hint="Discounts above this need the manager PIN.">
-        <input
-          className={inputClass}
-          inputMode="decimal"
-          value={limitText}
-          onChange={(e) => setLimitText(e.target.value)}
-        />
+        <NumberInput className={inputClass} value={limitText} onChange={(e) => setLimitText(e.target.value)} />
       </Field>
       <label className="flex items-start gap-3">
         <input
@@ -384,19 +380,19 @@ function PinSection() {
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="New PIN">
-          <input
+          <NumberInput
+            decimal={false}
             className={inputClass}
             type="password"
-            inputMode="numeric"
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
           />
         </Field>
         <Field label="Repeat new PIN">
-          <input
+          <NumberInput
+            decimal={false}
             className={inputClass}
             type="password"
-            inputMode="numeric"
             value={pin2}
             onChange={(e) => setPin2(e.target.value.replace(/\D/g, "").slice(0, 8))}
           />

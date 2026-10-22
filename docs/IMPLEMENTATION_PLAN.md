@@ -109,7 +109,8 @@ member's data on request (switch the membership off for now and ask for removal 
 |---|---|---|
 | 5a Back Office reports (done, 0.5.0) | Dashboards (Recharts), sales/profit/inventory/member reports, expenses, CSV | Run migration 9 |
 | 5b Employee IDs (done, 0.6.0) | Badges + PIN at the POS, authenticator for owner/manager, Staff page | Run migration 10, set up owner ID |
-| 5c Tablet and staff (next) | On-screen keypad and numpad, cashier shifts and cash count, audit history | — |
+| 5c Tablet keypad (done, 0.6.1) | Numpad on the sell screen, number keys in every number field | — |
+| 5d Shifts and audit (next) | Cashier shifts and cash count, audit history | — |
 | 6 Printer | PT-210 test, BLE/Classic adapter or native bridge | The printer |
 | 7 Backup & recovery | Cloud export, scheduled backups, restore wizard with staging | Off-site storage |
 | 8 Hardening | Real-device, power/network tests, security review, BIR review | BIR details |

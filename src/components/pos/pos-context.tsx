@@ -24,6 +24,7 @@ import {
   toSignedIn,
   type SignedInEmployee,
 } from "@/lib/staff/employees";
+import { NumberInput } from "@/components/keypad";
 import { ApproveWithCodeDialog, StaffSignInDialog } from "./staff-dialogs";
 
 const UNLOCK_MS = 5 * 60 * 1000;
@@ -234,10 +235,10 @@ function PinDialog({ reason, onDone }: { reason: string; onDone: (ok: boolean) =
           </p>
         )}
         <Field label={settingUp ? "New PIN (4 to 8 digits)" : "Manager PIN"}>
-          <input
+          <NumberInput
+            decimal={false}
             className={inputClass}
             type="password"
-            inputMode="numeric"
             autoComplete="off"
             autoFocus
             value={pin}
@@ -247,10 +248,10 @@ function PinDialog({ reason, onDone }: { reason: string; onDone: (ok: boolean) =
         </Field>
         {settingUp && (
           <Field label="Repeat PIN">
-            <input
+            <NumberInput
+              decimal={false}
               className={inputClass}
               type="password"
-              inputMode="numeric"
               autoComplete="off"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value.replace(/\D/g, "").slice(0, 8))}
