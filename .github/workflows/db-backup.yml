@@ -1,0 +1,79 @@
+# Nightly encrypted backup of the cloud database (docs/BACKUP_RECOVERY.md).
+# Needs two repository secrets: SUPABASE_DB_URL (the Session pooler connection
+# string from Supabase) and BACKUP_PASSPHRASE (at least 16 characters). The
+# backup is kept here for 90 days as a 7-Zip file that only the passphrase
+# opens; download it to the home hard drive from the run's page.
+name: Database backup
+
+on:
+  schedule:
+    # 00:30 in Manila (16:30 UTC), after closing.
+    - cron: "30 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check the secrets are set
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Add the SUPABASE_DB_URL and BACKUP_PASSPHRASE repository secrets (Settings > Secrets and variables > Actions). See docs/BACKUP_RECOVERY.md."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+
+      - name: Install the PostgreSQL 17 client and 7-Zip
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 p7zip-full >/dev/null
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+
+      - name: Back up the database
+        id: backup
+        run: |
+          file="$(bash scripts/db-backup.sh backup | tail -1)"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$file" .7z)" >> "$GITHUB_OUTPUT"
+          echo "bytes=$(stat -c %s "$file")" >> "$GITHUB_OUTPUT"
+          echo "Backup made: $(basename "$file"), $(du -h "$file" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the backup for 90 days
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.backup.outputs.name }}
+          path: ${{ steps.backup.outputs.file }}
+          retention-days: 90
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Record the run for the Back Office
+        if: always() && env.DB_URL != ''
+        env:
+          KIND: ${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}
+          OK: ${{ steps.backup.outcome == 'success' && steps.upload.outcome == 'success' }}
+          BYTES: ${{ steps.backup.outputs.bytes }}
+          NOTE: "${{ steps.backup.outputs.name || 'backup failed, see the run log on GitHub' }}"
+        run: |
+          psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v kind="$KIND" -v ok="$OK" -v bytes="$BYTES" -v note="$NOTE" <<'SQL' \
+            || echo "::warning::Could not record this run in the database. Run migration 12 (20261030000012_backups_and_lockdown.sql)."
+          insert into backup_runs (kind, ok, bytes, note)
+          values (:'kind', :'ok'::boolean, nullif(:'bytes', '')::bigint, left(:'note', 300));
+          SQL

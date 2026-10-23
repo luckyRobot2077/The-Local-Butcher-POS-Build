@@ -1,6 +1,6 @@
 {
   "name": "local-butcher-pos",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "test:db": "bash scripts/test-migrations.sh",
     "format": "prettier --write .",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run test:e2e"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run test:e2e",
+    "test:backup": "bash scripts/test-backup-restore.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

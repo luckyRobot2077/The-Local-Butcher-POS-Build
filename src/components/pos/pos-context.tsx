@@ -14,6 +14,7 @@ import {
   type Settings,
 } from "@/lib/db/config";
 import { ensureDefaultCategories } from "@/lib/db/seed";
+import { lockMessage, lockedFor, recordTry } from "@/lib/attempts";
 import { hashPin, isValidPinFormat, verifyPin } from "@/lib/pin";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
 import { CloudSyncProvider } from "./cloud-sync";
@@ -207,10 +208,15 @@ function PinDialog({ reason, onDone }: { reason: string; onDone: (ok: boolean) =
         await setPinRecord(await hashPin(pin));
         onDone(true);
       } else {
+        const wait = await lockedFor("managerPin");
+        if (wait) return setError(lockMessage(wait));
         const rec = await getPinRecord();
-        if (rec && (await verifyPin(pin, rec))) onDone(true);
+        const ok = !!rec && (await verifyPin(pin, rec));
+        await recordTry("managerPin", ok);
+        if (ok) onDone(true);
         else {
-          setError("Wrong PIN.");
+          const after = await lockedFor("managerPin");
+          setError(after ? lockMessage(after) : "Wrong PIN.");
           setPin("");
         }
       }

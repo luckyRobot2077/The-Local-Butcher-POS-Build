@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Keypad } from "@/components/keypad";
 import { Button, ErrorText, Field, Modal, inputClass } from "@/components/ui";
 import {
@@ -12,10 +12,8 @@ import {
   type LocalEmployee,
   type SignedInEmployee,
 } from "@/lib/staff/employees";
+import { lockMessage, lockedFor, recordTry } from "@/lib/attempts";
 import { QrScanner } from "./members/qr-scanner";
-
-const MAX_PIN_TRIES = 5;
-const PIN_LOCK_MS = 60_000;
 
 /**
  * Reads an employee badge: a handheld scanner types into the field (no
@@ -70,7 +68,6 @@ export function StaffSignInDialog({ onSignedIn }: { onSignedIn: (e: LocalEmploye
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const tries = useRef(new Map<string, { count: number; until: number }>());
 
   async function onBadge(text: string) {
     setError(undefined);
@@ -85,21 +82,17 @@ export function StaffSignInDialog({ onSignedIn }: { onSignedIn: (e: LocalEmploye
   async function submit(ev: FormEvent) {
     ev.preventDefault();
     if (!employee) return;
-    const t = tries.current.get(employee.id) ?? { count: 0, until: 0 };
-    if (t.until > Date.now()) return setError("Too many wrong PINs. Wait a minute and try again.");
+    const scope = `pin:${employee.id}`;
+    const wait = await lockedFor(scope);
+    if (wait) return setError(lockMessage(wait));
     setBusy(true);
     try {
-      if (await checkEmployeePin(employee, pin)) {
-        tries.current.delete(employee.id);
-        onSignedIn(employee);
-      } else {
-        t.count++;
-        if (t.count >= MAX_PIN_TRIES) {
-          t.count = 0;
-          t.until = Date.now() + PIN_LOCK_MS;
-        }
-        tries.current.set(employee.id, t);
-        setError("Wrong PIN.");
+      const ok = await checkEmployeePin(employee, pin);
+      await recordTry(scope, ok);
+      if (ok) onSignedIn(employee);
+      else {
+        const after = await lockedFor(scope);
+        setError(after ? lockMessage(after) : "Wrong PIN.");
         setPin("");
       }
     } finally {
@@ -189,11 +182,19 @@ export function ApproveWithCodeDialog({
   async function submit(ev: FormEvent) {
     ev.preventDefault();
     if (!approver) return;
+    const scope = `code:${approver.id}`;
+    const wait = await lockedFor(scope);
+    if (wait) return setError(lockMessage(wait));
     setBusy(true);
     try {
-      if (await checkApproverCode(approver, code)) onDone(approver);
+      const ok = await checkApproverCode(approver, code);
+      await recordTry(scope, ok);
+      if (ok) onDone(approver);
       else {
-        setError("Wrong or already used code. Wait for the next code in the authenticator app.");
+        const after = await lockedFor(scope);
+        setError(
+          after ? lockMessage(after) : "Wrong or already used code. Wait for the next code in the authenticator app.",
+        );
         setCode("");
       }
     } finally {

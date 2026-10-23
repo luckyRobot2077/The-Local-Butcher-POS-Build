@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.8.0 — 2026-10-23 — Automatic backups and hardening
+
+### Added
+- Nightly encrypted backup of the cloud database at 12:30 AM Manila time
+  (`.github/workflows/db-backup.yml`, `scripts/db-backup.sh`). It copies every table (products,
+  prices, stock, sales, shifts, members, staff, settings) and the staff sign-in accounts into a
+  7-Zip file with AES-256 encryption and hidden file names, checks that it opens, and keeps it on
+  GitHub for 90 days. Download it to the home hard drive from the run's page. Product photos are
+  not in it (they stay in Supabase Storage and in each device backup). Needs two GitHub secrets;
+  see docs/BACKUP_RECOVERY.md.
+- `scripts/db-restore.sh`: puts a backup into a new, empty Supabase project and checks every
+  table's row count against the backup. It refuses a database that already has accounts or sales,
+  or that is at another schema version. `npm run test:backup` does a full backup and restore round
+  trip on a local PostgreSQL.
+- Back Office → Backups: the last good backup, the recent runs, and how to download a backup. Every
+  Back Office page warns when no good backup was made in the last 36 hours.
+- A crash screen ("Something went wrong on this screen") with Try again and Reload, saying that
+  completed sales are already saved on the device, instead of a blank page.
+
+### Security
+- Wrong-try lock on this device: five wrong manager PINs, staff PINs or authenticator codes in a
+  row lock that check for 5 minutes. The count is kept in the device database, so reloading the
+  page does not reset it. (The staff PIN lock used to last 1 minute and reset on reload; the manager
+  PIN and the codes had none.)
+- The public key built into the web page ("anon") can no longer call any database function or read
+  any table. Every screen already needed a signed-in account; this removes Supabase's default
+  access. Migration 12 (`20261030000012_backups_and_lockdown.sql`), safe to run twice.
+- Production pages send a Content Security Policy (scripts only from this site, connections only to
+  this site and the Supabase project, no framing) and HSTS.
+
 ## 0.7.0 — 2026-10-23 — Cashier shifts and audit history
 
 ### Added

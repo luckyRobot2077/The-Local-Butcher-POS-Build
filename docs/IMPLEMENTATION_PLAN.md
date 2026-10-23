@@ -112,5 +112,7 @@ member's data on request (switch the membership off for now and ask for removal 
 | 5c Tablet keypad (done, 0.6.1) | Numpad on the sell screen, number keys in every number field | — |
 | 5d Shifts and audit (done, 0.7.0) | Shifts with starting cash and cash count, sale start and payment times, no-sale drawer log, Shifts page | Run migration 11 |
 | 6 Printer | PT-210 test, BLE/Classic adapter or native bridge | The printer |
-| 7 Backup & recovery | Cloud export, scheduled backups, restore wizard with staging | Off-site storage |
-| 8 Hardening | Real-device, power/network tests, security review, BIR review | BIR details |
+| 7a Backups (done, 0.8.0) | Nightly encrypted database backup on GitHub, restore script, Back Office Backups page | Add 2 GitHub secrets, run migration 12 |
+| 7b Restore wizard | Device restore wizard with staging, photo backups | — |
+| 8a Hardening (done, 0.8.0) | Wrong-try lock, anon lock-down, CSP/HSTS, crash screen | — |
+| 8b Hardening | Real-device, power/network tests, BIR review | The tablet, BIR details |
