@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.2 — 2026-10-23 — Backup failures name their cause
+
+### Fixed
+- When the backup itself fails, the run's summary now shows the stage that failed (checking the
+  server version, table definitions, shop data, sign-in accounts, row counts, encrypting) and the
+  error, with hosts and addresses hidden.
+- The job installs the PostgreSQL client that matches the Supabase server version (17 or newer), so
+  a newer server cannot make pg_dump refuse to run.
+- If the staff sign-in accounts cannot be read, the shop data is still backed up, with a warning
+  (staff would set new passwords after a restore).
+
 ## 0.8.1 — 2026-10-23 — Clearer backup errors
 
 ### Fixed
