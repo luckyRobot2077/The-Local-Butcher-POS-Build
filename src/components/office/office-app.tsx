@@ -33,6 +33,7 @@ import {
 import { ColumnChart, Legend, RankedBars, SERIES, ShareBar, TrendChart } from "./charts";
 import { SetupWizard, StaffPage, UnlockScreen, withSession, type OfficeSession } from "./staff";
 import { ShiftsPage } from "./shifts";
+import { BackupWarning, BackupsPage, useBackupStatus } from "./backups";
 
 const OTHER_PART = "#a7afb8";
 
@@ -45,6 +46,8 @@ type Gate =
   | { kind: "setup"; api: CloudApi; name: string; store: string }
   | { kind: "locked"; api: CloudApi; store: string }
   | { kind: "open"; api: CloudApi; base: CloudApi; store: string; session: OfficeSession };
+
+type Tab = "reports" | "shifts" | "staff" | "backups";
 
 const SESSION_KEY = "tlb-office-session";
 
@@ -81,7 +84,7 @@ function download(name: string, csv: string) {
 
 export function OfficeApp() {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
-  const [tab, setTab] = useState<"reports" | "shifts" | "staff">("reports");
+  const [tab, setTab] = useState<Tab>("reports");
 
   const openWith = useCallback((base: CloudApi, store: string, session: OfficeSession) => {
     saveSession(session);
@@ -197,6 +200,7 @@ export function OfficeApp() {
                 ["reports", "Reports"],
                 ["shifts", "Shifts"],
                 ["staff", "Staff"],
+                ["backups", "Backups"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -246,6 +250,10 @@ export function OfficeApp() {
         {gate.kind === "locked" && (
           <UnlockScreen api={gate.api} onUnlocked={(sess) => openWith(gate.api, gate.store, sess)} />
         )}
+        {gate.kind === "open" && tab !== "backups" && (
+          <OpenBackupWarning key={`backups-${gate.session.token}`} api={gate.api} onOpen={() => setTab("backups")} />
+        )}
+        {gate.kind === "open" && tab === "backups" && <BackupsPage api={gate.api} />}
         {gate.kind === "open" && tab === "reports" && <Dashboard key={gate.session.token} api={gate.api} />}
         {gate.kind === "open" && tab === "shifts" && <ShiftsPage api={gate.api} onCsv={download} />}
         {gate.kind === "open" && tab === "staff" && (
@@ -254,6 +262,11 @@ export function OfficeApp() {
       </main>
     </div>
   );
+}
+
+function OpenBackupWarning({ api, onOpen }: { api: CloudApi; onOpen: () => void }) {
+  const { status } = useBackupStatus(api);
+  return <BackupWarning status={status} onOpen={onOpen} />;
 }
 
 function Notice({ children }: { children: ReactNode }) {

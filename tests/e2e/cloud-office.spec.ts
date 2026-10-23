@@ -495,3 +495,42 @@ test("Shifts page: every device's shifts with times, cash count, no-sale opening
   expect(csv.split("\r\n")).toHaveLength(6);
   expect(csv).toContain('"Drawer opened, no sale"');
 });
+
+test("Backups page: warns when the nightly backup is late, lists runs, links to the downloads", async ({ page }) => {
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+  let lastOkAt: string | null = hoursAgo(50);
+  await fakeSupabase(page, {
+    whoami: whoami("owner"),
+    office_status: () => ({ setupOpen: false, accountRole: "owner", employees: 2 }),
+    office_unlock: () => SESSION,
+    office_report: (b) => fakeReport(b.p_from as string | null, b.p_to as string, []),
+    office_backups: (b) =>
+      b.p_token === SESSION.token
+        ? {
+            lastOkAt,
+            runs: [
+              { finished_at: hoursAgo(26), kind: "scheduled", ok: false, bytes: null, note: "backup failed" },
+              { finished_at: hoursAgo(50), kind: "scheduled", ok: true, bytes: 2_400_000, note: "x" },
+            ],
+          }
+        : { status: 403, body: { code: "42501", message: "locked" } },
+  });
+  await signIn(page);
+  await unlock(page, "TLB-STAFF:owner", "123456");
+  await expect(page.getByTestId("backup-warning")).toContainText("may be failing");
+  await page.getByTestId("backup-warning").getByRole("button", { name: "Open Backups" }).click();
+  await expect(page.getByTestId("backup-health")).toHaveAttribute("data-health", "late");
+  await expect(page.getByTestId("backup-runs").locator("li")).toHaveCount(2);
+  await expect(page.getByTestId("backup-runs").locator("li").first()).toContainText("Failed");
+  await expect(page.getByTestId("backup-runs").locator("li").nth(1)).toContainText("2.3 MB");
+  await expect(page.getByRole("link", { name: "Open the backup runs on GitHub" })).toHaveAttribute(
+    "href",
+    /actions\/workflows\/db-backup\.yml$/,
+  );
+
+  lastOkAt = hoursAgo(2);
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByTestId("backup-health")).toHaveAttribute("data-health", "ok");
+  await page.getByTestId("office-tab-reports").click();
+  await expect(page.getByTestId("backup-warning")).toHaveCount(0);
+});

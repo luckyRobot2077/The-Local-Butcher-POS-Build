@@ -166,3 +166,20 @@ Safe to run more than once (`add column if not exists`, `create table if not exi
   sale is never refused because of its shift. Payloads of older sales are unchanged.
 - `office_shifts(p_from, p_to, token)`: shifts opened in the date range (Manila) with their sales
   (start and payment times) and drawer openings; open shifts total the sales synced so far.
+
+### `20261030000012_backups_and_lockdown.sql`
+
+Safe to run more than once.
+
+- `backup_runs`: one row per run of the nightly backup job (`.github/workflows/db-backup.yml`),
+  written by the job itself over the database connection. RLS on with no policies; staff reach it
+  only through `office_backups(token)`, which returns the last good time and the 20 newest runs.
+- `lock_down_anon()`: takes away every right the public `anon` key had in `public` (Supabase grants
+  anon execute on new functions and full rights on new tables by default; Postgres grants functions
+  to PUBLIC). `authenticated` keeps exactly the functions it could call before. Default privileges
+  stop Supabase's automatic anon grants for later objects. Only the database owner can run it.
+- **Every later migration ends with `select lock_down_anon();`** so its new functions are closed to
+  anon too (PUBLIC still gets new functions by Postgres default).
+- `supabase/tests/auth_stub.sql` now mimics Supabase's default grants to anon and authenticated, and
+  `supabase/tests/hardening_test.sql` checks: anon can run no function and use no table, every
+  security definer function pins `search_path`, staff keep the functions the app uses.
