@@ -38,6 +38,13 @@ fresh source
 sales="$("${PSQL[@]}" -d source -At -c "select count(*) from sales")"
 [ "$sales" -gt 0 ] || { echo "FAIL: the source database has no sales to back up"; exit 1; }
 
+DB_URL="$(url source)" bash "$ROOT/scripts/db-check-url.sh" | grep -q "Connected. Database schema version 2" \
+  || { echo "FAIL: connection check did not pass on a good database"; exit 1; }
+if DB_URL="$(url nosuchdb)" bash "$ROOT/scripts/db-check-url.sh" >/dev/null 2>&1; then
+  echo "FAIL: connection check passed on a missing database"; exit 1
+fi
+echo "  ok: connection check"
+
 export BACKUP_PASSPHRASE="correct horse battery staple"
 archive="$(DB_URL="$(url source)" bash "$ROOT/scripts/db-backup.sh" "$TMP/out" | tail -1)"
 echo "  ok: backup made ($(du -h "$archive" | cut -f1), $sales sales)"
