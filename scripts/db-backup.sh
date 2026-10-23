@@ -27,20 +27,44 @@ trap 'rm -rf "$WORK"' EXIT
 STAMP="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 DUMP=(pg_dump "$DB_URL" --no-owner --no-privileges --quote-all-identifiers)
 
-"${DUMP[@]}" --schema-only --schema=public -f "$WORK/public-schema.sql"
-"${DUMP[@]}" --data-only --schema=public -f "$WORK/public-data.sql"
-"${DUMP[@]}" --data-only --table=auth.users --table=auth.identities -f "$WORK/auth-data.sql"
+# Each stage says what it is doing, so a failure in the log names its stage.
+stage() { echo "stage: $1" >&2; }
 
+stage "checking pg_dump matches the server"
+server_major="$(psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 -c "show server_version_num")"
+server_major=$((server_major / 10000))
+client_major="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+if [ "$client_major" -lt "$server_major" ]; then
+  echo "pg_dump $client_major cannot back up a PostgreSQL $server_major server; install postgresql-client-$server_major." >&2
+  exit 1
+fi
+
+stage "dumping the table definitions"
+"${DUMP[@]}" --schema-only --schema=public -f "$WORK/public-schema.sql"
+stage "dumping the shop data"
+"${DUMP[@]}" --data-only --schema=public -f "$WORK/public-data.sql"
+stage "dumping the staff sign-in accounts"
+if ! "${DUMP[@]}" --data-only --table=auth.users --table=auth.identities -f "$WORK/auth-data.sql"; then
+  # The shop data matters most: keep going without the accounts, and say so.
+  echo "warning: the staff sign-in accounts could not be backed up; staff would set new passwords after a restore." >&2
+  : >"$WORK/auth-data.sql"
+  AUTH_NOTE="auth_accounts=missing"
+fi
+
+stage "counting rows"
 {
   echo "Local Butcher POS database backup"
   echo "made_at_utc=$STAMP"
+  echo "${AUTH_NOTE:-auth_accounts=included}"
   psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select 'schema_version=' || value from schema_info where key = 'schema_version'"
   psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 -f "$(dirname "$0")/db-row-counts.sql"
 } >"$WORK/manifest.txt"
 
+stage "encrypting"
 ARCHIVE="$OUT/local-butcher-db-$STAMP.7z"
 (cd "$WORK" && 7z a -t7z -mhe=on -mx=9 -bso0 -bsp0 "-p$BACKUP_PASSPHRASE" "$ARCHIVE" \
   public-schema.sql public-data.sql auth-data.sql manifest.txt)
+stage "checking the archive opens"
 # Check the archive opens with the passphrase before calling it done.
 7z t -bso0 -bsp0 "-p$BACKUP_PASSPHRASE" "$ARCHIVE"
 echo "$ARCHIVE"

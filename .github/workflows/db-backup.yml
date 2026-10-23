@@ -44,15 +44,21 @@ jobs:
 
       - uses: actions/checkout@v5
 
-      - name: Install the PostgreSQL 17 client and 7-Zip
+      - name: Install the PostgreSQL client and 7-Zip
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-17 p7zip-full >/dev/null
-          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+          # pg_dump must be at least the server's version; ask the server which
+          # (the runner's own psql is enough for that), else use 17.
+          major="$(psql "$DB_URL" -X -At -c "show server_version_num" 2>/dev/null || true)"
+          major=$(( ${major:-170000} / 10000 ))
+          [ "$major" -ge 17 ] || major=17
+          sudo apt-get install -y -qq "postgresql-client-$major" p7zip-full >/dev/null
+          echo "/usr/lib/postgresql/$major/bin" >> "$GITHUB_PATH"
+          echo "Installed the PostgreSQL $major client."
 
       - name: Check the database connection
         run: bash scripts/db-check-url.sh
@@ -60,7 +66,18 @@ jobs:
       - name: Back up the database
         id: backup
         run: |
-          bash scripts/db-backup.sh backup > backup.out
+          status=0
+          bash scripts/db-backup.sh backup > backup.out 2> backup.err || status=$?
+          cat backup.err >&2
+          if [ "$status" -ne 0 ]; then
+            # Show the failing stage and error in the summary, with project
+            # names, hosts and addresses hidden (the log is public).
+            why="$(tail -4 backup.err | sed -E 's/[a-z0-9.-]+\.supabase\.(co|com)/<host>/g; s/postgres\.[a-z0-9]+/postgres.<project>/g; s/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/<address>/g' | tr '\n' ' ')"
+            echo "::error::Backup failed: $why"
+            echo "Backup failed: $why" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          grep '^warning:' backup.err | sed 's/^warning: /::warning::/' || true
           file="$(tail -1 backup.out)"
           if [ ! -s "$file" ]; then
             echo "::error::The backup file was not made. See the log of this step."
