@@ -22,6 +22,8 @@ if [ "${#BACKUP_PASSPHRASE}" -lt 16 ]; then
   exit 1
 fi
 mkdir -p "$OUT"
+# Absolute, because the archive is written from inside the work folder.
+OUT="$(cd "$OUT" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 STAMP="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
@@ -42,6 +44,9 @@ fi
 stage "dumping the table definitions"
 "${DUMP[@]}" --schema-only --schema=public -f "$WORK/public-schema.sql"
 stage "dumping the shop data"
+# pg_dump warns about circular foreign keys (products <-> product_images,
+# inventory_batches). Expected: db-restore.sh loads with triggers and
+# foreign-key checks paused (session_replication_role = replica).
 "${DUMP[@]}" --data-only --schema=public -f "$WORK/public-data.sql"
 stage "dumping the staff sign-in accounts"
 if ! "${DUMP[@]}" --data-only --table=auth.users --table=auth.identities -f "$WORK/auth-data.sql"; then

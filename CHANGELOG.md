@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.3 — 2026-10-23 — Backup archive path
+
+### Fixed
+- The backup job wrote the encrypted file inside its temporary folder instead of the output
+  folder, so the "checking the archive opens" step could not find it. The output folder is now
+  made absolute first. The local round-trip test now uses a relative folder like the job does.
+
 ## 0.8.2 — 2026-10-23 — Backup failures name their cause
 
 ### Fixed

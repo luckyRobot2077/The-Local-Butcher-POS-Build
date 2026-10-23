@@ -46,7 +46,9 @@ fi
 echo "  ok: connection check"
 
 export BACKUP_PASSPHRASE="correct horse battery staple"
-archive="$(DB_URL="$(url source)" bash "$ROOT/scripts/db-backup.sh" "$TMP/out" | tail -1)"
+# A relative output folder, as the GitHub job uses.
+archive="$(cd "$TMP" && DB_URL="$(url source)" bash "$ROOT/scripts/db-backup.sh" out | tail -1)"
+[ -s "$archive" ] || { echo "FAIL: no archive at $archive"; exit 1; }
 echo "  ok: backup made ($(du -h "$archive" | cut -f1), $sales sales)"
 
 if 7z t -bso0 -bse0 -pwrong "$archive" >/dev/null 2>&1; then echo "FAIL: archive opens with a wrong passphrase"; exit 1; fi
