@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.1 — 2026-10-23 — Clearer backup errors
+
+### Fixed
+- The nightly backup could fail without saying why (the run showed only "Input required and not
+  supplied: path"). It now checks the secrets and the database connection first and stops with a
+  plain message: passphrase too short, `[YOUR-PASSWORD]` left in, Direct connection or port 6543
+  used instead of the Session pooler, a special character in the password, wrong password, wrong
+  user name, or database unreachable. Host names and addresses are hidden in the public log.
+
 ## 0.8.0 — 2026-10-23 — Automatic backups and hardening
 
 ### Added
