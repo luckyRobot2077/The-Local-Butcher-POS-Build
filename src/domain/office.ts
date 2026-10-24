@@ -6,6 +6,7 @@
 import type { Centavos } from "./money";
 import { formatManila, formatManilaSeconds } from "./time";
 import { cashDifference, shiftTimeline, type TimelineEntry } from "./shift";
+import type { TaxPeriod } from "./tax";
 
 export interface DailyPoint {
   date: string;
@@ -501,5 +502,30 @@ export function shiftsCsv(shifts: OfficeShift[]): string {
       "Approved by",
     ],
     rows,
+  );
+}
+
+export function taxPeriodsCsv(periods: TaxPeriod[], percentageTaxBp: number): string {
+  return toCsv(
+    [
+      "Period",
+      "Sales",
+      "Gross sales",
+      "Non-VAT sales",
+      `Percentage tax (${percentageTaxBp / 100}%)`,
+      "VATable sales (excl. VAT)",
+      "VAT",
+      "VAT-exempt sales",
+    ],
+    periods.map((p) => [
+      p.period,
+      p.sales,
+      csvPeso(p.gross),
+      csvPeso(p.nonVatSales),
+      csvPeso(p.percentageTax),
+      csvPeso(p.vatableSales),
+      csvPeso(p.vatAmount),
+      csvPeso(p.vatExemptSales),
+    ]),
   );
 }

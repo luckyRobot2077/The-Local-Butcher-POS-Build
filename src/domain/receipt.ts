@@ -5,6 +5,7 @@ import { formatManila } from "./time";
 import { describeDiscount } from "./discount";
 import type { PaymentRecord, SaleItemRecord, SaleRecord } from "./checkout";
 import type { AppliedDiscountInput } from "./cart";
+import { formatRateBp } from "./tax";
 
 /**
  * Transport-independent receipt renderer. It produces plain text lines
@@ -20,6 +21,8 @@ export interface ReceiptHeader {
   /** Free-form registered business details, one per line. */
   businessLines: string[];
   footer: string;
+  /** BIR TIN from the Back Office tax setup; printed with VAT or non-VAT status. */
+  tin?: string;
 }
 
 export interface ReceiptInput {
@@ -87,6 +90,11 @@ export function renderReceipt(r: ReceiptInput, width = RECEIPT_WIDTH_58MM): stri
   lines.push(...center(header.storeName.toUpperCase(), width));
   if (header.tagline) lines.push(...center(header.tagline, width));
   for (const b of header.businessLines) if (b.trim()) lines.push(...center(b, width));
+  const vat = sale.taxMode === "vat";
+  const tin = header.tin?.trim();
+  if (vat) lines.push(...center(tin ? `VAT REG TIN ${tin}` : "VAT REGISTERED", width));
+  else if (sale.taxMode === "non_vat" && tin)
+    lines.push(...center("NON-VAT REGISTERED", width), ...center(`TIN ${tin}`, width));
   lines.push(rule);
   lines.push(...center("NON-FISCAL TEST RECEIPT", width));
   lines.push(...center("Not an official receipt/invoice", width));
@@ -103,7 +111,9 @@ export function renderReceipt(r: ReceiptInput, width = RECEIPT_WIDTH_58MM): stri
     // Sold by peso amount: the amount is exact and the weight is about what it buys.
     const approx = it.saleUnit === "kg" && it.gross !== lineGross(it.saleUnit, it.unitPrice, it.qty) ? "~" : "";
     const detail = `  ${approx}${formatQuantity(it.saleUnit, it.qty)} @ ${formatPeso(it.unitPrice)}${unitLabel(it.saleUnit)}`;
-    lines.push(...leftRight(detail, formatPeso(it.gross), width));
+    // VAT receipts mark each line V (VATable) or E (VAT-exempt).
+    const mark = vat ? (it.taxClass === "exempt" ? " E" : " V") : "";
+    lines.push(...leftRight(detail, formatPeso(it.gross) + mark, width));
     if (it.itemDiscount > 0) {
       const label = it.discount ? `  Less ${discountLabel(it.discount)}` : "  Less discount";
       lines.push(...leftRight(label, "-" + formatPeso(it.itemDiscount), width));
@@ -125,6 +135,14 @@ export function renderReceipt(r: ReceiptInput, width = RECEIPT_WIDTH_58MM): stri
   }
   lines.push(...leftRight("TOTAL", formatPeso(sale.total), width));
   lines.push(rule);
+  if (vat) {
+    lines.push(...leftRight("VATable Sales", formatPeso(sale.vatableSales ?? 0), width));
+    lines.push(...leftRight(`VAT (${formatRateBp(sale.vatRateBp ?? 1200)})`, formatPeso(sale.vatAmount ?? 0), width));
+    lines.push(...leftRight("VAT-Exempt Sales", formatPeso(sale.vatExemptSales ?? 0), width));
+    lines.push(...leftRight("Zero-Rated Sales", formatPeso(0), width));
+    lines.push(...center("V = VATable  E = VAT-exempt", width));
+    lines.push(rule);
+  }
   if (payment.method === "cash") {
     lines.push(...leftRight("Cash", formatPeso(payment.tendered), width));
     lines.push(...leftRight("Change", formatPeso(payment.change), width));

@@ -33,6 +33,7 @@ import {
 import { ColumnChart, Legend, RankedBars, SERIES, ShareBar, TrendChart } from "./charts";
 import { SetupWizard, StaffPage, UnlockScreen, withSession, type OfficeSession } from "./staff";
 import { ShiftsPage } from "./shifts";
+import { TaxesPage } from "./taxes";
 import { BackupWarning, BackupsPage, useBackupStatus } from "./backups";
 
 const OTHER_PART = "#a7afb8";
@@ -47,7 +48,7 @@ type Gate =
   | { kind: "locked"; api: CloudApi; store: string }
   | { kind: "open"; api: CloudApi; base: CloudApi; store: string; session: OfficeSession };
 
-type Tab = "reports" | "shifts" | "staff" | "backups";
+type Tab = "reports" | "shifts" | "taxes" | "staff" | "backups";
 
 const SESSION_KEY = "tlb-office-session";
 
@@ -199,6 +200,7 @@ export function OfficeApp() {
               [
                 ["reports", "Reports"],
                 ["shifts", "Shifts"],
+                ["taxes", "Taxes"],
                 ["staff", "Staff"],
                 ["backups", "Backups"],
               ] as const
@@ -256,6 +258,9 @@ export function OfficeApp() {
         {gate.kind === "open" && tab === "backups" && <BackupsPage api={gate.api} />}
         {gate.kind === "open" && tab === "reports" && <Dashboard key={gate.session.token} api={gate.api} />}
         {gate.kind === "open" && tab === "shifts" && <ShiftsPage api={gate.api} onCsv={download} />}
+        {gate.kind === "open" && tab === "taxes" && (
+          <TaxesPage api={gate.api} canEdit={gate.session.role === "owner"} onCsv={download} />
+        )}
         {gate.kind === "open" && tab === "staff" && (
           <StaffPage api={gate.api} storeName={gate.store} session={gate.session} />
         )}

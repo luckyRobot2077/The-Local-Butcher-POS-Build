@@ -228,3 +228,17 @@ describe("cloud sync", () => {
     expect(cloud.stockOf(p.id)).toBe(3300);
   });
 });
+
+describe("tax setup sync", () => {
+  it("downloads the Back Office tax setup and keeps it when the cloud is older", async () => {
+    const { getTaxSettings } = await import("@/lib/db/config");
+    const cloud = new FakeCloud();
+    const db = await device();
+    cloud.taxSettings = { mode: "vat", tin: "123-456-789-00000", categories: {}, products: {} };
+    await runSync(cloud.api(), db);
+    expect((await getTaxSettings(db)).mode).toBe("vat");
+    cloud.deny.add("store_tax_settings");
+    await runSync(cloud.api(), db);
+    expect((await getTaxSettings(db)).tin).toBe("123-456-789-00000");
+  });
+});
