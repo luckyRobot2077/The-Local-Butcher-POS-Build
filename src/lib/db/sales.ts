@@ -1,7 +1,8 @@
 import { buildSale, formatReceiptNo, type PaymentInput, type SaleRecord } from "@/domain/checkout";
 import type { AppliedDiscountInput, CartTotals } from "@/domain/cart";
 import { getDb } from "./db";
-import { ensureDevice } from "./config";
+import { ensureDevice, getTaxSettings } from "./config";
+import { productClass } from "@/domain/tax";
 import { newId, nowIso } from "./ids";
 import { OPEN_SHIFT_KEY } from "./shifts";
 
@@ -30,12 +31,29 @@ export async function completeSale(args: CompleteSaleArgs, db = getDb()): Promis
   const saleId = newId();
   return db.transaction(
     "rw",
-    [db.sales, db.saleItems, db.payments, db.inventoryMovements, db.products, db.outbox, db.config, db.auditLog],
+    [
+      db.sales,
+      db.saleItems,
+      db.payments,
+      db.inventoryMovements,
+      db.products,
+      db.categories,
+      db.outbox,
+      db.config,
+      db.auditLog,
+    ],
     async () => {
       const seq = (((await db.config.get("receiptSeq"))?.value as number | undefined) ?? 0) + 1;
       await db.config.put({ key: "receiptSeq", value: seq });
       const now = args.now ?? new Date();
       const shiftId = (await db.config.get(OPEN_SHIFT_KEY))?.value as string | undefined;
+      const taxSettings = await getTaxSettings(db);
+      const classes = new Map<string, ReturnType<typeof productClass>>();
+      for (const l of args.totals.lines) {
+        const product = await db.products.get(l.productId);
+        const category = product ? await db.categories.get(product.categoryId) : undefined;
+        classes.set(l.productId, productClass(taxSettings, product ?? { id: l.productId, categoryId: "" }, category));
+      }
       const { sale, items, payment } = buildSale({
         totals: args.totals,
         payment: args.payment,
@@ -44,6 +62,11 @@ export async function completeSale(args: CompleteSaleArgs, db = getDb()): Promis
         member: args.member,
         startedAt: args.startedAt,
         shiftId,
+        tax: {
+          mode: taxSettings.mode,
+          rateBp: taxSettings.vatRateBp,
+          classOf: (id) => classes.get(id) ?? "vatable",
+        },
         saleId,
         receiptNo: formatReceiptNo(device.deviceCode, seq),
         storeId: device.storeId,

@@ -273,3 +273,34 @@ describe("sample catalog", () => {
     await db2.delete();
   });
 });
+
+describe("taxes on local sales", () => {
+  it("taxes a VATable category once the shop is VAT-registered", async () => {
+    const { setTaxSettings } = await import("@/lib/db/config");
+    const { normalizeTaxSettings } = await import("@/domain/tax");
+    await loadSampleCatalog("Owner", db);
+    const belly = await firstProduct("Liempo (Pork Belly)");
+    const chicken = await firstProduct("Whole Chicken");
+    const chickenCat = chicken.categoryId;
+    await setTaxSettings(
+      normalizeTaxSettings({ mode: "vat", tin: "123456789", categories: { [chickenCat]: "vatable" } }),
+      db,
+    );
+    const totals = priceCart({ lines: [lineFor(belly, 1000), lineFor(chicken, 1)] });
+    const sale = await completeSale({ totals, payment: { method: "cash", tendered: 100000 }, cashierName: "Ana" }, db);
+    expect(sale.taxMode).toBe("vat");
+    expect(sale.vatExemptSales).toBe(35000);
+    expect(sale.vatAmount).toBe(Math.floor((chicken.price * 1200 * 2 + 11200) / (11200 * 2)));
+    const detail = await getSaleDetail(sale.id, db);
+    expect(detail?.items.map((i) => i.taxClass)).toEqual(["exempt", "vatable"]);
+  });
+
+  it("records non-VAT sales by default", async () => {
+    await loadSampleCatalog("Owner", db);
+    const belly = await firstProduct("Liempo (Pork Belly)");
+    const totals = priceCart({ lines: [lineFor(belly, 1000)] });
+    const sale = await completeSale({ totals, payment: { method: "cash", tendered: 100000 }, cashierName: "Ana" }, db);
+    expect(sale.taxMode).toBe("non_vat");
+    expect(sale.vatAmount).toBeUndefined();
+  });
+});

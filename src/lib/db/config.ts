@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DEFAULT_INVENTORY_RULES } from "@/domain/inventory";
+import { normalizeTaxSettings, type TaxSettings } from "@/domain/tax";
 import { getDb, type PosDatabase } from "./db";
 import { newId } from "./ids";
 
@@ -127,4 +128,13 @@ export async function getLastExportAt(db = getDb()): Promise<string | undefined>
 
 export async function setLastExportAt(at: string, db = getDb()): Promise<void> {
   await db.config.put({ key: "lastExportAt", value: at });
+}
+
+/** Store tax setup, set in the Back Office and downloaded on every sync. Non-VAT until then. */
+export async function getTaxSettings(db = getDb()): Promise<TaxSettings> {
+  return normalizeTaxSettings(await getValue<unknown>(db, "taxSettings"));
+}
+
+export async function setTaxSettings(s: TaxSettings, db = getDb()): Promise<void> {
+  await db.config.put({ key: "taxSettings", value: normalizeTaxSettings(s) });
 }

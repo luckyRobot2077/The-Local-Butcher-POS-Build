@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { renderReceipt } from "@/domain/receipt";
 import { getSaleDetail, recordReceiptPrint } from "@/lib/db/sales";
+import { getTaxSettings } from "@/lib/db/config";
 import { browserPrintAdapter } from "@/lib/printer/adapter";
 import { Button, ErrorText } from "@/components/ui";
 import { usePos } from "./pos-context";
@@ -11,6 +12,7 @@ import { usePos } from "./pos-context";
 export function ReceiptView({ saleId }: { saleId: string }) {
   const { settings, cashierName } = usePos();
   const detail = useLiveQuery(() => getSaleDetail(saleId), [saleId]);
+  const tax = useLiveQuery(() => getTaxSettings(), []);
   const [error, setError] = useState<string>();
   if (detail === undefined) return <p className="text-charcoal-500">Loading receipt…</p>;
   if (detail === null) return <ErrorText>Receipt not found on this device.</ErrorText>;
@@ -21,6 +23,7 @@ export function ReceiptView({ saleId }: { saleId: string }) {
       tagline: settings.tagline,
       businessLines: settings.businessLines,
       footer: settings.receiptFooter,
+      tin: tax?.tin,
     },
     ...detail,
     reprint: detail.sale.receiptPrintCount > 0,

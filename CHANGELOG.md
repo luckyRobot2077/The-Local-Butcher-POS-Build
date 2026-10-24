@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.0 — 2026-10-24 — Product taxes
+
+Needs migration 13 (`20261031000013_taxes.sql`).
+
+### Added
+- Back Office → Taxes (owner only): choose VAT-registered or not VAT-registered, enter the TIN and
+  registered name/address, and mark each category and product VATable (12%) or VAT-exempt. Fresh
+  meat and fresh goods start as exempt; condiments, side dishes and similar categories as VATable.
+  Devices download the setup on every sync.
+- Sales record their tax details. VAT-registered sales split VATable sales, VAT and VAT-exempt sales;
+  prices stay VAT-inclusive.
+- VAT receipts show "VAT REG TIN", mark each line V or E and print the VAT breakdown. Non-VAT receipts
+  show "NON-VAT REGISTERED" and the TIN once it is set.
+- Tax report by quarter or month: gross sales, the 3% percentage tax for a non-VAT shop, VATable
+  sales, VAT and exempt sales, by category, with a CSV download. See docs/TAXES.md.
+
 ## 0.8.3 — 2026-10-23 — Backup archive path
 
 ### Fixed

@@ -2,6 +2,7 @@ import { type Centavos, assertCentavos, divRoundHalfUp } from "./money";
 import { type CartTotals, type AppliedDiscountInput } from "./cart";
 import { type SaleUnit } from "./quantity";
 import { businessDate } from "./time";
+import { computeTax, type TaxClass, type TaxMode } from "./tax";
 
 export type PaymentMethod = "cash" | "gcash";
 
@@ -38,6 +39,10 @@ export interface SaleItemRecord {
   orderDiscountShare: Centavos;
   net: Centavos;
   discount?: AppliedDiscountInput;
+  /** VATable or VAT-exempt when the sale was made (absent on sales before taxes, 0.9.0). */
+  taxClass?: TaxClass;
+  /** VAT inside net; 0 unless the shop was VAT-registered. */
+  vat?: Centavos;
 }
 
 export type SyncStatus = "pending" | "synced" | "failed";
@@ -71,6 +76,13 @@ export interface SaleRecord {
   startedAt?: string;
   /** The cashier shift open on this device when the sale was paid. */
   shiftId?: string;
+  /** Tax setup when the sale was made; sales before 0.9.0 have none and count as non-VAT. */
+  taxMode?: TaxMode;
+  /** VAT-registered sales only: VATable sales without VAT, the VAT, and VAT-exempt sales. */
+  vatableSales?: Centavos;
+  vatAmount?: Centavos;
+  vatExemptSales?: Centavos;
+  vatRateBp?: number;
   itemCount: number;
   syncStatus: SyncStatus;
   receiptPrintCount: number;
@@ -91,6 +103,8 @@ export interface BuildSaleArgs {
   member?: { id: string; memberNo: string };
   startedAt?: string;
   shiftId?: string;
+  /** How each product is taxed; without it the sale records no tax details. */
+  tax?: { mode: TaxMode; rateBp: number; classOf: (productId: string) => TaxClass };
   saleId: string;
   receiptNo: string;
   storeId: string;
@@ -122,6 +136,14 @@ export function buildSale(a: BuildSaleArgs): { sale: SaleRecord; items: SaleItem
     reference = a.payment.reference?.trim() || undefined;
   }
 
+  const tax = a.tax
+    ? computeTax(
+        totals.lines.map((l) => ({ net: l.net, taxClass: a.tax!.classOf(l.productId) })),
+        a.tax.mode,
+        a.tax.rateBp,
+      )
+    : undefined;
+
   const items: SaleItemRecord[] = totals.lines.map((l, i) => ({
     id: a.newId(),
     saleId: a.saleId,
@@ -137,6 +159,7 @@ export function buildSale(a: BuildSaleArgs): { sale: SaleRecord; items: SaleItem
     orderDiscountShare: l.orderDiscountShare,
     net: l.net,
     discount: l.discount,
+    ...(tax ? { taxClass: tax.lines[i].taxClass, vat: tax.lines[i].vat } : {}),
   }));
 
   const sale: SaleRecord = {
@@ -162,6 +185,15 @@ export function buildSale(a: BuildSaleArgs): { sale: SaleRecord; items: SaleItem
     ...(a.member ? { customerId: a.member.id, memberNo: a.member.memberNo } : {}),
     ...(a.startedAt && a.startedAt <= a.now.toISOString() ? { startedAt: a.startedAt } : {}),
     ...(a.shiftId ? { shiftId: a.shiftId } : {}),
+    ...(tax ? { taxMode: tax.mode } : {}),
+    ...(tax?.mode === "vat"
+      ? {
+          vatableSales: tax.vatableSales,
+          vatAmount: tax.vatAmount,
+          vatExemptSales: tax.vatExemptSales,
+          vatRateBp: tax.rateBp,
+        }
+      : {}),
     itemCount: items.length,
     syncStatus: "pending",
     receiptPrintCount: 0,

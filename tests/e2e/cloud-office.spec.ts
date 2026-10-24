@@ -534,3 +534,111 @@ test("Backups page: warns when the nightly backup is late, lists runs, links to 
   await page.getByTestId("office-tab-reports").click();
   await expect(page.getByTestId("backup-warning")).toHaveCount(0);
 });
+
+test("Taxes page: owner sets VAT registration, TIN and category taxes; the report shows VAT and 3% tax", async ({
+  page,
+}) => {
+  const calls: { fn: string; body: Record<string, unknown> }[] = [];
+  let saved: Record<string, unknown> = {};
+  await fakeSupabase(
+    page,
+    {
+      whoami: whoami("owner"),
+      office_status: () => ({ setupOpen: false, accountRole: "owner", employees: 2 }),
+      office_unlock: () => SESSION,
+      office_report: (b) => fakeReport(b.p_from as string | null, b.p_to as string, []),
+      store_tax_settings: () => saved,
+      save_tax_settings: (b) => {
+        saved = { ...(b.p as Record<string, unknown>), updatedAt: new Date().toISOString(), updatedBy: "Josh" };
+        return saved;
+      },
+      office_tax_report: () => ({
+        from: "2026-07-01",
+        to: "2026-10-24",
+        months: [
+          {
+            month: "2026-08",
+            sales: 300,
+            gross: 25_000_000,
+            non_vat_sales: 25_000_000,
+            vatable_sales: 0,
+            vat_amount: 0,
+            vat_exempt_sales: 0,
+          },
+          {
+            month: "2026-10",
+            sales: 120,
+            gross: 9_000_000,
+            non_vat_sales: 0,
+            vatable_sales: 803_571,
+            vat_amount: 96_429,
+            vat_exempt_sales: 8_100_000,
+          },
+        ],
+        categories: [
+          {
+            category_id: "c1",
+            name: "Pork",
+            gross: 30_000_000,
+            vatable_gross: 0,
+            vat: 0,
+            exempt_gross: 7_000_000,
+            non_vat_gross: 23_000_000,
+          },
+          {
+            category_id: "c2",
+            name: "Condiments",
+            gross: 900_000,
+            vatable_gross: 900_000,
+            vat: 96_429,
+            exempt_gross: 0,
+            non_vat_gross: 0,
+          },
+        ],
+      }),
+    },
+    calls,
+    {
+      categories: [
+        { id: "c1", name: "Pork", sort_order: 0 },
+        { id: "c2", name: "Condiments", sort_order: 1 },
+        { id: "c3", name: "Side Dishes", sort_order: 2 },
+      ],
+      products: [
+        { id: "p1", name: "Liempo", category_id: "c1", active: true },
+        { id: "p2", name: "Longganisa", category_id: "c1", active: true },
+      ],
+    },
+  );
+  await signIn(page);
+  await unlock(page, "TLB-STAFF:owner", "123456");
+  await page.getByTestId("office-tab-taxes").click();
+  await expect(page.getByTestId("tax-category")).toHaveCount(3);
+  await expect(page.getByLabel("Pork tax")).toHaveValue("exempt");
+  await expect(page.getByLabel("Condiments tax")).toHaveValue("vatable");
+
+  await page.getByTestId("tax-mode-vat").check();
+  await page.getByTestId("tax-save").click();
+  await expect(page.getByText("must enter its TIN")).toBeVisible();
+  await page.getByTestId("tax-tin").fill("123-456-789-00000");
+  await page.getByText(/Products taxed differently/).click();
+  await page.getByLabel("Longganisa tax").selectOption("vatable");
+  await page.getByTestId("tax-save").click();
+  await expect(page.getByTestId("tax-saved")).toBeVisible();
+  const p = calls.find((c) => c.fn === "save_tax_settings")!.body.p as Record<string, unknown>;
+  expect(p).toMatchObject({
+    mode: "vat",
+    tin: "123-456-789-00000",
+    vatRateBp: 1200,
+    percentageTaxBp: 300,
+    categories: { c1: "exempt", c2: "vatable", c3: "vatable" },
+    products: { p2: "vatable" },
+  });
+
+  const rows = page.getByTestId("tax-period");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("2026-Q3");
+  await expect(rows.nth(0)).toContainText("₱7,500.00"); // 3% of ₱250,000
+  await expect(rows.nth(1)).toContainText("₱964.29");
+  await page.screenshot({ path: "test-results/office-taxes.png", fullPage: true });
+});

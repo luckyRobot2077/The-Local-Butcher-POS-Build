@@ -33,6 +33,7 @@ export class FakeCloud {
   movements = new Map<string, Row>();
   sales = new Map<string, string>(); // id -> canonical payload
   employees: Record<string, unknown>[] = [];
+  taxSettings: Record<string, unknown> = {};
   shifts = new Map<string, Row>();
   drawerEvents = new Map<string, Row>();
   saleRows: (Row & { receivedAt: string })[] = [];
@@ -479,6 +480,8 @@ export class FakeCloud {
       }
       case "employees_feed":
         return { now: new Date().toISOString(), employees: this.employees };
+      case "store_tax_settings":
+        return this.taxSettings;
       case "store_stock":
         return [...this.products.keys()].map((id) => ({ product_id: id, stock_qty: this.stockOf(id) }));
       default:

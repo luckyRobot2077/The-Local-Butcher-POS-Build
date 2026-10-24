@@ -14,6 +14,7 @@ export async function fakeSupabase(
   page: Page,
   rpc: Record<string, RpcHandler>,
   calls: { fn: string; body: Record<string, unknown> }[] = [],
+  tables: Record<string, unknown[]> = {},
 ) {
   await page.route("http://supabase.fake.test/**", async (route: Route) => {
     const req = route.request();
@@ -68,7 +69,7 @@ export async function fakeSupabase(
       }
       return json(200, out ?? null);
     }
-    if (url.pathname.startsWith("/rest/v1/")) return json(200, []);
+    if (url.pathname.startsWith("/rest/v1/")) return json(200, tables[url.pathname.split("/").pop()!] ?? []);
     return json(404, { message: "not faked" });
   });
 }

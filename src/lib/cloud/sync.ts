@@ -3,6 +3,8 @@ import type { AppliedDiscountInput } from "@/domain/cart";
 import type { DiscountProgram } from "@/domain/programs";
 import type { Shift } from "@/domain/shift";
 import type { Gender } from "@/domain/members";
+import { normalizeTaxSettings } from "@/domain/tax";
+import { setTaxSettings } from "@/lib/db/config";
 import { getDb, type PosDatabase } from "@/lib/db/db";
 import { nowIso } from "@/lib/db/ids";
 import { MEMBER_VISITS_KEY, type ServerVisitCounts } from "@/lib/db/members";
@@ -141,6 +143,12 @@ async function doSync(api: CloudApi, db: PosDatabase): Promise<SyncReport> {
     } catch (e) {
       if (!(e instanceof CloudRejection)) throw e;
       await patchSyncMeta({ membersFeedError: e.message }, db);
+    }
+    // Tax setup from the Back Office; an older database without it keeps what the device has.
+    try {
+      await setTaxSettings(normalizeTaxSettings(await api.rpc<unknown>("store_tax_settings", {})), db);
+    } catch (e) {
+      if (!(e instanceof CloudRejection)) throw e;
     }
     // Visit counts and staff badges for the counter; an older database without them keeps what the device has.
     try {
@@ -617,6 +625,16 @@ export function salePayload(sale: SaleRecord, items: SaleItemRecord[], payment: 
       // Likewise only on sales made since shifts (0.7.0).
       ...(sale.startedAt ? { startedAt: sale.startedAt } : {}),
       ...(sale.shiftId ? { shiftId: sale.shiftId } : {}),
+      // Likewise only on sales made since taxes (0.9.0).
+      ...(sale.taxMode ? { taxMode: sale.taxMode } : {}),
+      ...(sale.taxMode === "vat"
+        ? {
+            vatableSales: sale.vatableSales ?? 0,
+            vatAmount: sale.vatAmount ?? 0,
+            vatExemptSales: sale.vatExemptSales ?? 0,
+            vatRateBp: sale.vatRateBp ?? 1200,
+          }
+        : {}),
     },
     items: items
       .slice()
@@ -634,6 +652,7 @@ export function salePayload(sale: SaleRecord, items: SaleItemRecord[], payment: 
         itemDiscount: i.itemDiscount,
         orderDiscountShare: i.orderDiscountShare,
         net: i.net,
+        ...(i.taxClass ? { taxClass: i.taxClass, vat: i.vat ?? 0 } : {}),
       })),
     payment: {
       id: payment.id,
